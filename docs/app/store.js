@@ -16,6 +16,8 @@ export const DEFAULT_SETTINGS = {
   cbm_product_alias: "{\"リフィルリボン(黒)詰替用YRR-5840-BL\": \"リフィルリボン黒 YRR-5840-BL\", \"ハーフリフィルリボン(黒)詰替用YRR-3040-BL\": \"ハーフリフィルリボン黒 YRR-3040-BL\", \"感熱紙(カンサナロー、DTAヨウ)\": \"感熱紙(監査ナロー、DTA用)\", \"GC31KHブラック\": \"トナー GC31 ブラック\", \"GC31YHイエロー\": \"トナー GC31 ブラック以外\", \"GC31CHシアン\": \"トナー GC31 ブラック以外\", \"GC31MHマゼンタ\": \"トナー GC31 ブラック以外\", \"GC42KHブラック\": \"トナー GC42 ブラック\", \"ペン本体(黒)KY-012362-3\": \"マーキングペン(黒)KY-012362-3\", \"替芯(18本)+補充インキ(黒18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(赤18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(青18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(緑18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(黄土色18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\"}",
   cbm_store_map: '{}',
   staff: '[]', // 担当者（メールの差し出し人）
+  // 卸先別の年間管理表：行（卸先・グループ）の並び、明細の卸先名→行の対応、明細のない月に手で入れた金額
+  kanri_rows: '[]', kanri_alias: '{}', kanri_manual: '{}',
   // 取引先ごとの単価の決め方を、価格表より優先して決めておく（「すべて原価」の取引先など）
   client_price_mode: '{}',
 };
@@ -49,6 +51,17 @@ export const store = {
     this.db = await this.backend.load();
     for (const k of ['businesses', 'clients', 'products', 'clientPrices', 'recurring', 'cbmLines', 'invoices', 'catalog']) this.db[k] = this.db[k] || [];
     this.db.settings = this.db.settings || {};
+    await this.splitCbmConsul();
+  },
+
+  // 事業「シービーエム・コンサル」を「CBM」と「コンサル」に分ける（最初の1回だけ。請求書の振り分けは、請求書の画面で事業を変えて行う）
+  async splitCbmConsul() {
+    const old = this.db.businesses.find((b) => b.name === 'シービーエム・コンサル');
+    if (!old || this.db.businesses.some((b) => b.name === 'コンサル')) return;
+    const after = this.db.businesses.filter((b) => b.id !== old.id && b.sort > old.sort);
+    await this.saveBusiness({ ...old, name: 'CBM' });
+    for (const b of after) await this.saveBusiness({ ...b, sort: b.sort + 1 }); // 「コンサル」をCBMのすぐ右に並べる
+    await this.saveBusiness({ ...old, id: Math.max(...this.db.businesses.map((b) => b.id)) + 1, name: 'コンサル', sort: old.sort + 1 });
   },
 
   /* ---- 読む ---- */

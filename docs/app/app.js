@@ -11,6 +11,7 @@ import { stubPage } from './pages/stub.js';
 import { clientsPage, clientEditPage } from './pages/clients.js';
 import { productsPage, matrixPage } from './pages/products.js';
 import { cbmPage } from './pages/cbm.js';
+import { kanriPage } from './pages/kanri.js';
 import { fixedPage } from './pages/fixed.js';
 import { paymentsPage } from './pages/payments.js';
 import { reportPage } from './pages/report.js';
@@ -28,7 +29,7 @@ function header(active, bizTabs) {
   const bid = state.biz;
   const cur = bid ? store.bizOf(bid) : null;
   const rec = cur && isReconcile(cur);
-  const nav = [['list', bid === 0 ? '全体' : (rec ? '入金予定' : '請求書')], ['clients', '取引先'], ['products', '商品・単価'], ['payments', '入金照合'], ['report', '月次集計'], ['catalog', '商品データ格納庫'], ['settings', '設定']]
+  const nav = [['list', bid === 0 ? '全体' : (rec ? '入金予定' : '請求書')], ['clients', '取引先'], ['products', '商品・単価'], ['payments', '入金照合'], ['report', '月次集計'], ['kanri', '年間管理表'], ['catalog', '商品データ格納庫'], ['settings', '設定']]
     .filter(([k]) => !(k === 'products' && (rec || bid === 0)));
   let html = `<header class="top"><a class="brand" href="#list">GROW 請求・入金管理</a><nav>`;
   for (const [k, label] of nav) html += `<a href="#${k}"${k === active ? ' class="on"' : ''}>${label}</a>`;
@@ -69,6 +70,7 @@ function render() {
   else if (route === 'products') page = productsPage();
   else if (route === 'matrix') page = matrixPage();
   else if (route === 'cbm') page = cbmPage();
+  else if (route === 'kanri') page = kanriPage();
   else if (route === 'fixed') page = fixedPage();
   else if (route === 'payments') page = paymentsPage();
   else if (route === 'report') page = reportPage();

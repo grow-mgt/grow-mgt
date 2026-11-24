@@ -116,7 +116,7 @@ export function matrixPage() {
   if (!all) active = active.filter((p) => used.has(p.id) || p.price != null);
 
   const html = head('matrix') + `
-<p class="muted">青い欄は「価格表」スプレッドシートから読み込んだ単価です（変えるときはスプレッドシートで）。緑の欄はアプリで入れた単価、空欄は「価格表にない商品」のルールか標準単価を使います。${!all ? '<a href="#matrix" id="showAll">すべての商品を表示</a>' : ''}</p>
+<p class="muted">緑の欄はアプリで入れた単価、空欄は「価格表にない商品」のルールか標準単価を使います。${!all ? '<a href="#matrix" id="showAll">すべての商品を表示</a>' : ''}</p>
 ${groups.length ? `<div class="filters"><a class="chip${g === '' ? ' on' : ''}" href="#matrix" data-g="">すべて</a>${groups.map((gr) => `<a class="chip${g === gr ? ' on' : ''}" href="#matrix" data-g="${h(gr)}">${h(gr)}</a>`).join('')}</div>` : ''}
 ${!clients.length || !active.length ? '<div class="empty">取引先と商品を登録すると、ここで取引先ごとの単価を一覧で入れられます。</div>' : `
 <form id="matrixForm">
@@ -125,7 +125,7 @@ ${!clients.length || !active.length ? '<div class="empty">取引先と商品を�
     <thead><tr><th class="sticky">取引先</th>${active.map((p) => `<th class="r">${h(p.name)}<br><span class="muted small">標準 ${p.price != null ? nf(p.price) : '未設定'}</span></th>`).join('')}</tr></thead>
     <tbody>
     ${clients.map((c) => `<tr><th class="sticky">${h(c.name)}</th>${active.map((p) => {
-      const m = cp.get(c.id + '_' + p.id); const isS = m && m.source === 'sheet';
+      const m = cp.get(c.id + '_' + p.id); const isS = false;
       return `<td><input data-c="${c.id}" data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${isS ? ' sheet' : (m ? ' set' : '')}"${isS ? ' readonly title="価格表スプレッドシートの単価"' : ''} inputmode="numeric" placeholder="${p.price != null ? nf(p.price) : ''}"></td>`;
     }).join('')}</tr>`).join('')}
     </tbody>
@@ -144,7 +144,6 @@ ${!clients.length || !active.length ? '<div class="empty">取引先と商品を�
         e.preventDefault();
         for (const inp of form.querySelectorAll('input[data-c]')) {
           const cid = Number(inp.dataset.c), pid = Number(inp.dataset.p), m = cp.get(cid + '_' + pid);
-          if (m && m.source === 'sheet') continue; // 価格表スプレッドシートの単価はここでは変えない
           const val = toIntOrNull(inp.value);
           if ((m ? m.price : null) !== val) await store.setClientPrice(cid, pid, val);
         }

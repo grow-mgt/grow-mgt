@@ -4,6 +4,7 @@ import { state, once, go } from '../nav.js';
 import { isReconcile, priceInfo } from '../logic.js';
 import { h, yen, nf, toIntOrNull, isEmail, nowUtc } from '../util.js';
 import { flash, showFlash, confirmBox } from '../ui.js';
+import { exportCsv, mailCsv } from '../export.js';
 
 const FIELDS = ['name', 'corp_name', 'group_name', 'honorific', 'contact', 'representative', 'email', 'cc', 'postal', 'address', 'payer_kana', 'memo'];
 // 参照元スプレッドシートで管理する項目（スプレッドシートから来た取引先では、アプリでは変えない）
@@ -30,7 +31,12 @@ export function clientsPage() {
   const html = `
 <div class="head-row">
   <h1>取引先 <span class="muted small">${bid ? h(store.bizOf(bid).name) : 'GROW全体'}</span></h1>
-  <a class="btn primary" href="#client-new">＋ 取引先を登録</a>
+  <div class="btns">
+    <button class="btn small" id="cCsv"${rows.length ? '' : ' disabled'}>${store.isPreview ? '顧客情報をコピーする' : '顧客情報をCSVで書き出す'}</button>
+    <button class="btn small" id="cPriceCsv"${rows.length ? '' : ' disabled'}>${store.isPreview ? '単価表をコピーする' : '単価表をCSVで書き出す'}</button>
+    <button class="btn small" id="cMail"${rows.length ? '' : ' disabled'}>CSVをメールで送る</button>
+    <a class="btn primary" href="#client-new">＋ 取引先を登録</a>
+  </div>
 </div>
 ${!rows.length ? '<div class="empty">取引先はまだありません。</div>' : `
 <div class="table-wrap">
@@ -39,7 +45,7 @@ ${!rows.length ? '<div class="empty">取引先はまだありません。</div>'
   <tbody id="clientRows">
   ${rows.map((r) => { const s = stat(r); return `
     <tr data-id="${r.id}">
-      <td><a href="#client-${r.id}">${h(r.name)}</a> <span class="muted small">${h(r.honorific)}</span>${r.source === 'sheet' ? ' <span class="badge b-sheet">スプレッドシート</span>' : ''}${r.corp_name ? `<br><span class="muted small">${h(r.corp_name)}</span>` : ''}</td>
+      <td><a href="#client-${r.id}">${h(r.name)}</a> <span class="muted small">${h(r.honorific)}</span>${r.corp_name ? `<br><span class="muted small">${h(r.corp_name)}</span>` : ''}</td>
       ${!bid ? `<td class="small muted">${h(store.bizOf(r.business_id).name)}</td>` : ''}
       <td class="small muted">${h(r.group_name)}</td>
       <td>${h(r.contact)}</td>
@@ -56,6 +62,25 @@ ${!rows.length ? '<div class="empty">取引先はまだありません。</div>'
     mount(root) {
       const tb = root.querySelector('#clientRows');
       if (tb) tb.addEventListener('click', (e) => { if (e.target.closest('a')) return; const tr = e.target.closest('tr'); if (tr) go('client-' + tr.dataset.id); });
+      // 顧客情報・単価表をCSVにする
+      const bizName = (id) => (store.bizOf(id) || {}).name || '';
+      const infoTable = () => [['事業', '取引先名', '敬称', '法人名', 'グループ', 'ご担当者', '代表者', 'メール', 'CC', '郵便番号', '住所', '振込名義（カナ）', '請求方法', '単価の決め方', '月額固定', 'メモ']].concat(rows.map((c) => [
+        bizName(c.business_id), c.name, c.honorific || '', c.corp_name || '', c.group_name || '', c.contact || '', c.representative || '', c.email || '', c.cc || '', c.postal || '', c.address || '', c.payer_kana || '',
+        c.billing_method || '', ruleLabel(c) || '標準単価', store.db.recurring.filter((x) => x.client_id === c.id).map((x) => x.name + ' ' + nf(x.price) + '円').join('／'), c.memo || '']));
+      const priceTable = () => {
+        const out = [['取引先名', '商品', '単位', 'この取引先の単価（税抜）', '標準単価', '仕入単価']];
+        for (const c of rows) for (const x of store.db.clientPrices.filter((v) => v.client_id === c.id)) {
+          const p = store.product(x.product_id); if (!p) continue;
+          out.push([c.name, p.name, p.unit || '', x.price, p.price == null ? '' : p.price, p.cost == null ? '' : p.cost]);
+        }
+        return out;
+      };
+      const scope = bid ? store.bizOf(bid).name : 'GROW全体';
+      const on = (id, fn) => { const el = root.querySelector(id); if (el) el.addEventListener('click', fn); };
+      on('#cCsv', () => exportCsv(infoTable(), `顧客情報_${scope}.csv`));
+      on('#cPriceCsv', () => exportCsv(priceTable(), `顧客別単価表_${scope}.csv`));
+      on('#cMail', () => mailCsv({ title: '顧客情報をメールで送る', files: [{ name: `顧客情報_${scope}.csv`, table: infoTable() }, { name: `顧客別単価表_${scope}.csv`, table: priceTable() }],
+        subject: `【${store.setting('company') || 'GROW'}】顧客情報（${scope}）`, body: `お疲れさまです。\n\n顧客情報と顧客別の単価表（${scope}）をCSVでお送りします。\nご確認をお願いいたします。` }));
     },
   };
 }
@@ -78,7 +103,7 @@ export function clientEditPage(arg) {
   let c = { id: 0, honorific: '御中', business_id: state.biz || store.businesses()[0].id, source: 'app', sheet_note: '', price_rule: '', price_rule_amount: 0 };
   for (const f of FIELDS) if (!(f in c)) c[f] = '';
   if (!isNew) { const found = store.client(Number(arg)); if (!found) return null; c = found; }
-  const lk = (c.source || 'app') === 'sheet';
+  const lk = false; // 顧客情報はアプリで管理する（スプレッドシートから読み込んだ取引先も、アプリで直せる）
   const ro = lk ? ' readonly class="locked"' : '';
   const crec = isReconcile(store.bizOf(c.business_id));
   const groups = [...new Set(store.db.clients.map((x) => x.group_name).filter(Boolean))];
@@ -123,7 +148,7 @@ export function clientEditPage(arg) {
 
   ${prods.length && !crec ? `
   <h2>この取引先の単価</h2>
-  <p class="small muted">青い欄は「価格表」スプレッドシートから読み込んだ単価です（スプレッドシートで直してください）。空欄の商品は、下の「価格表にない商品」のルールか標準単価になります。</p>
+  <p class="small muted">空欄の商品は、下の「価格表にない商品」のルールか標準単価になります。</p>
   <label>価格表にない商品の単価
     ${lk ? `<input value="${h(ruleLabel(c) || '標準単価')}（価格表で設定）" readonly class="locked">` : `
     <span class="rule-row">
@@ -140,7 +165,7 @@ export function clientEditPage(arg) {
   <table class="list small cp">
     <thead><tr><th>商品</th><th class="r">標準単価</th><th class="r">仕入単価</th><th class="r w-price">この取引先の単価</th></tr></thead>
     ${prods.map((p) => {
-      const m = mine.get(p.id); const fromSheet = m && m.source === 'sheet';
+      const m = mine.get(p.id); const fromSheet = false;
       const ph = c.id ? priceInfo(c.id, p.id) : { price: p.price, from: '' };
       return `<tr><td>${h(p.name)}</td><td class="r muted">${p.price != null ? nf(p.price) : '未設定'}</td><td class="r muted">${p.cost != null ? nf(p.cost) : ''}</td>
         <td><input data-pid="${p.id}" value="${m ? h(m.price) : ''}" class="r cpin${fromSheet ? ' sheet' : (m ? ' set' : '')}"${fromSheet ? ' readonly title="価格表から読み込んだ単価"' : ''} inputmode="numeric" placeholder="${ph.price != null ? nf(ph.price) + '（' + h(ph.from) + '）' : ''}"></td></tr>`;
@@ -188,7 +213,6 @@ ${c.id ? '<div class="danger-zone"><button class="btn danger small" id="delClien
         // この取引先の単価（空欄は標準単価）。価格表から来た単価はここでは変えない
         for (const inp of root.querySelectorAll('.cpin')) {
           const pid = Number(inp.dataset.pid), m = mine.get(pid);
-          if (m && m.source === 'sheet') continue;
           const val = toIntOrNull(inp.value);
           if ((m ? m.price : null) !== val) await store.setClientPrice(target.id, pid, val);
         }

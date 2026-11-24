@@ -26,9 +26,9 @@ export class FirestoreBackend {
 
   /* ---- メール ---- */
   // 送るのは Cloud Functions の sendMail（差し出し人は、設定に登録した担当者だけ）
-  async sendMail({ from, to, cc, subject, body }) {
+  async sendMail({ from, to, cc, subject, body, attachments }) {
     try {
-      const r = await httpsCallable(this.fn, 'sendMail')({ from, to, cc: cc || '', subject, body });
+      const r = await httpsCallable(this.fn, 'sendMail')({ from, to, cc: cc || '', subject, body, attachments: attachments || [] });
       return r.data;
     } catch (e) {
       if (e && e.code === 'functions/not-found') throw new Error('メール送信の仕組みが、まだFirebaseに入っていません。');

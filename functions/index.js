@@ -30,7 +30,7 @@ exports.sendMail = onCall(
     // ログインしていない人からの送信は受け付けない
     if (!request.auth) throw new HttpsError("unauthenticated", "ログインが必要です。");
 
-    const { from, to, cc, subject, body } = request.data || {};
+    const { from, to, cc, subject, body, attachments } = request.data || {};
     const toList = splitList(to);
     const ccList = splitList(cc);
 
@@ -42,6 +42,17 @@ exports.sendMail = onCall(
     if (toList.length + ccList.length > 10) throw new HttpsError("invalid-argument", "宛先は合わせて10件までにしてください。");
     if (typeof subject !== "string" || subject.trim() === "") throw new HttpsError("invalid-argument", "件名が空です。");
     if (typeof body !== "string" || body.trim() === "") throw new HttpsError("invalid-argument", "本文が空です。");
+
+    // 添付（CSVなど）：3つまで、合わせて約3MBまで
+    const files = Array.isArray(attachments) ? attachments : [];
+    if (files.length > 3) throw new HttpsError("invalid-argument", "添付は3つまでにしてください。");
+    let size = 0;
+    for (const f of files) {
+      if (!f || typeof f.name !== "string" || !/^[^\\/:*?"<>|\r\n]{1,80}\.(csv|pdf)$/i.test(f.name)) throw new HttpsError("invalid-argument", "添付のファイル名が正しくありません。");
+      if (typeof f.content !== "string" || !/^[A-Za-z0-9+/=]+$/.test(f.content)) throw new HttpsError("invalid-argument", "添付の中身が正しくありません。");
+      size += f.content.length;
+    }
+    if (size > 4000000) throw new HttpsError("invalid-argument", "添付が大きすぎます。");
 
     const values = await loadSettings();
     const me = staffOf(values).find((s) => String(s.email).toLowerCase() === from.toLowerCase());
@@ -58,6 +69,7 @@ exports.sendMail = onCall(
       textContent: body,
     };
     if (ccList.length) payload.cc = ccList.map((email) => ({ email }));
+    if (files.length) payload.attachment = files.map((f) => ({ name: f.name, content: f.content }));
 
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",

@@ -2,6 +2,7 @@
 import { store } from '../store.js';
 import { state, once, go } from '../nav.js';
 import { isReconcile, calcInvoice, nextNumber, priceInfo, refreshPaymentStatus } from '../logic.js';
+import { syncLinesFromInvoice } from '../kanri-logic.js';
 import { h, yen, num, today, nowUtc, addDays, endOfNextMonth, isYmd, randomToken } from '../util.js';
 import { flash, showFlash } from '../ui.js';
 
@@ -265,6 +266,7 @@ ${locked ? '<p class="muted small">※入金記録がある請求書です。金
         const common = { number, client_id: clientId, title: form.title.value.trim(), issue_date: issue, due_date: due, notes: form.notes.value.trim(), withholding: wh,
           subtotal: calc.subtotal, tax: calc.tax, withholding_amount: calc.withholding_amount, total: calc.total, tax_mode: taxMode, incomplete, items: withAmount };
         let target;
+        const oldItems = id ? (store.invoice(id).items || []).map((x) => ({ ...x })) : null; // 直す前の明細（管理表への反映に使う）
         if (id) {
           target = Object.assign(store.invoice(id), common);
           store.logEvent(target, 'edit', '内容を変更');
@@ -295,7 +297,11 @@ ${locked ? '<p class="muted small">※入金記録がある請求書です。金
         }
         refreshPaymentStatus(target);
         await store.saveInvoice(target);
-        flash('請求書を保存しました。' + (learned ? `（${learned}件の単価をこの取引先の単価として保存）` : '') + (added ? `（新しい商品を${added}件登録）` : ''));
+        // シービーエムの明細から作った請求書を直したら、控えの明細（年間管理表）にも反映する
+        const sy = id ? await syncLinesFromInvoice(oldItems, target) : null;
+        const syMsg = sy && (sy.changed || sy.removed || sy.added || sy.missed)
+          ? '（年間管理表にも反映：' + [sy.changed ? '変更' + sy.changed + '行' : '', sy.removed ? '削除' + sy.removed + '行' : '', sy.added ? '追加' + sy.added + '行' : '', sy.missed ? '明細に見つからず反映できなかった行' + sy.missed + '行' : ''].filter(Boolean).join('・') + '）' : '';
+        flash('請求書を保存しました。' + syMsg + (learned ? `（${learned}件の単価をこの取引先の単価として保存）` : '') + (added ? `（新しい商品を${added}件登録）` : ''));
         go('invoice-' + target.id);
       });
     },
