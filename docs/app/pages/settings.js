@@ -146,6 +146,8 @@ ${store.backend.kind !== 'firestore' ? `
         }
         go('settings');
       }));
+      // 今ある事業は、「使い方」や期日を選び直したら、その場で保存する（下の「保存」を押し忘れても反映されるように）
+      root.querySelectorAll('[data-biz-form]:not(.new) select').forEach((el) => el.addEventListener('change', () => el.form.requestSubmit()));
 
       // 担当者
       const stBody = root.querySelector('#staff tbody');
