@@ -474,3 +474,9 @@ th.sortable[data-dir="desc"]::after { content: " ▼"; font-size: 10px; }
 .kanri thead th { position: sticky; top: 0; }
 .badge.warn { background: #fff1d6; color: #9a5b00; }
 .head-row .btns { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+/* 請求書：題字を太く、宛名は題字より少し細く。宛名は1行に収める */
+.doc-title { font-weight: 600; }
+.doc .to .client { font-weight: 500; white-space: nowrap; }
+.form label.check { display: flex; align-items: center; gap: 8px; }
+.form label.check input { width: auto; }

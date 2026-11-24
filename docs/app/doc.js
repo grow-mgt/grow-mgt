@@ -20,9 +20,30 @@ function shortStore(storeName, clientName) {
   return s;
 }
 
+// 宛名が長いときは、1行に収まるように文字を小さくする（全角1文字＝1、半角＝0.58で幅を見積もる）
+function fitSize(text, base, width, min) {
+  let units = 0;
+  for (const ch of String(text)) units += /[ -~｡-ﾟ]/.test(ch) ? (ch === ' ' ? 0.32 : 0.58) : 1;
+  const size = Math.floor(width / Math.max(units, 1) * 10) / 10;
+  return size >= base ? null : Math.max(min, size);
+}
+
+// 同じ商品を1行にまとめる（取引日を出さない取引先用）。数量を足す
+function mergeSame(list) {
+  const out = new Map();
+  for (const it of list) {
+    const key = [it.product_id || 'n:' + it.name, it.price, it.tax_rate, it.unit || ''].join('|');
+    const cur = out.get(key);
+    if (cur) cur.qty = Number(cur.qty) + Number(it.qty);
+    else out.set(key, { ...it, item_date: '' });
+  }
+  return [...out.values()];
+}
+
 export function renderInvoiceDoc(inv) {
   const s = store.settings();
   const items = inv.items || [];
+  const merge = Number(inv.merge_items) === 1; // 取引日なし・同じ商品は店ごとにまとめる
   const taxMode = inv.tax_mode === 'include' ? 'include' : 'exclude';
   const calc = calcInvoice(items, !!inv.withholding, taxMode);
 
@@ -36,18 +57,22 @@ export function renderInvoiceDoc(inv) {
     groups.get(g).push(it);
   }
   if (groups.has(OTHER)) { const o = groups.get(OTHER); groups.delete(OTHER); groups.set('その他', o); }
+  if (merge) for (const [g, list] of groups) groups.set(g, mergeSame(list));
+  const dateTd = (v) => (merge ? '' : `<td class="c-date">${v}</td>`);
 
   // 宛名は法人名（なければ取引先名）。1店舗で法人名と違うときは店名を下に添える
   const toName = String(inv.corp_name || '').trim() !== '' ? inv.corp_name : inv.client_name;
   const toSub = (toName !== inv.client_name && !hasShip) ? inv.client_name : '';
 
+  const fit = fitSize(toName + ' ' + inv.honorific, 20, 356, 10);
+
   let rows = '';
   for (const [g, list] of groups) {
-    if (g !== '') rows += `<tr class="sec"><td></td><td>${h(g === 'その他' ? 'その他' : shortStore(g, inv.client_name))}</td><td></td><td></td><td></td></tr>`;
+    if (g !== '') rows += `<tr class="sec">${dateTd('')}<td>${h(g === 'その他' ? 'その他' : shortStore(g, inv.client_name))}</td><td></td><td></td><td></td></tr>`;
     for (const it of list) {
       const isHead = Number(it.qty) === 0; // 数量0の行は店舗名などの見出し：数字は出さない
       rows += `<tr>
-        <td class="c-date">${h(String(it.item_date || '').replace(/-/g, '/'))}</td>
+        ${dateTd(h(String(it.item_date || '').replace(/-/g, '/')))}
         <td>${h(it.name)}${Number(it.tax_rate) === 8 ? ' <span class="mark">※</span>' : ''}</td>
         <td class="r">${isHead ? '' : h(qtyText(it))}</td>
         <td class="r">${isHead ? '' : nf(it.price)}</td>
@@ -81,7 +106,7 @@ export function renderInvoiceDoc(inv) {
 
   <div class="doc-parties">
     <div class="to">
-      <p class="client">${h(toName)} ${h(inv.honorific)}</p>
+      <p class="client"${fit ? ` style="font-size:${fit}px"` : ''}>${h(toName)} ${h(inv.honorific)}</p>
       ${toSub !== '' ? `<p class="client-sub">${h(toSub)}</p>` : ''}
       ${inv.title ? `<p class="subject">件名：${h(inv.title)}</p>` : ''}
       <p class="lead">下記のとおりご請求申し上げます。</p>
@@ -101,7 +126,7 @@ export function renderInvoiceDoc(inv) {
   </div>
 
   <table class="doc-items">
-    <thead><tr><th class="c-date">取引日</th><th>品目</th><th class="c-qty">数量</th><th class="c-price">単価</th><th class="c-amt">金額</th></tr></thead>
+    <thead><tr>${merge ? '' : '<th class="c-date">取引日</th>'}<th>品目</th><th class="c-qty">数量</th><th class="c-price">単価</th><th class="c-amt">金額</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 

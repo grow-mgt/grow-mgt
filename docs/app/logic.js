@@ -117,14 +117,18 @@ export function priceInfo(clientId, productId) {
 
 /* ---------- メールの文面 ---------- */
 export function publicUrl(inv) {
-  const base = store.isPreview ? 'https://grow-mgt.web.app' : location.origin;
-  return base + '/view.html?t=' + inv.token;
+  // 先方が請求書を見るページ（アプリと同じ場所に置く）
+  const base = store.isPreview ? 'https://grow-mgt.github.io/grow-mgt/' : new URL('.', location.href).href;
+  return base + 'view.html?t=' + inv.token;
 }
 export function fillTemplate(tpl, inv) {
   const s = store.settings();
   const contact = String(inv.contact || '').trim();
   const map = {
-    '{client}': (inv.corp_name ? inv.corp_name + '\n' : '') + inv.client_name + ' ' + inv.honorific,
+    // 宛名は請求書と同じ（法人名があれば法人名、なければ取引先名）
+    '{client}': (String(inv.corp_name || '').trim() !== '' ? inv.corp_name : inv.client_name) + ' ' + inv.honorific,
+    // 件名から「令和8年10月分」などの月の部分を外したもの（例：薬局消耗品）
+    '{item}': String(inv.title || '').replace(/\s*(令和\s*\d+\s*年|20\d{2}\s*年)?\s*\d{1,2}\s*月分.*$/u, '').trim() || 'ご利用分',
     '{contact}': contact !== '' ? contact + ' 様' : '',
     '{number}': inv.number,
     '{title}': inv.title !== '' ? inv.title : 'ご利用分',

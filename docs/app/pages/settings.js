@@ -83,7 +83,7 @@ export function settingsPage() {
     <label class="check"><input type="checkbox" name="mail_bcc_self" value="1"${s.mail_bcc_self === '1' ? ' checked' : ''}> 送ったメールの控えを、担当者にも届ける（BCC）</label>
     <label class="span2">メールの件名<input name="mail_subject" value="${h(s.mail_subject)}"></label>
     <label class="span2">メールの本文<textarea name="mail_body" rows="14" class="mono">${h(s.mail_body)}</textarea>
-      <small>差し込める項目：{client} 取引先名、{contact} ご担当者、{number} 請求書番号、{title} 件名、{amount} 金額、{due} 期限、{url} 請求書リンク、{issuer} 自社名、{issuer_tel}、{issuer_email}</small></label>
+      <small>差し込める項目：{client} 宛名（法人名＋御中）、{item} 件名から月を外したもの（例：薬局消耗品）、{contact} ご担当者、{number} 請求書番号、{title} 件名、{amount} 金額、{due} 期限、{url} 請求書リンク、{issuer} 自社名、{issuer_tel}、{issuer_email}</small></label>
   </div>
 
   <h2>請求書の初期値</h2>

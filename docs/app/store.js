@@ -10,8 +10,8 @@ export const DEFAULT_SETTINGS = {
   company: '', representative: '', postal: '', address: '', tel: '', fax: '', seal_image: '',
   number_style: 'date', email: '', reg_no: '', bank: '',
   mail_from: '', mail_from_name: '', mail_bcc_self: '1', due_days: '30', number_prefix: 'INV',
-  mail_subject: '【請求書】{number} {issuer}',
-  mail_body: '{client}\n{contact}\n\nいつもお世話になっております。\n{issuer}です。\n\n{title}の請求書をお送りいたします。\n下記のリンクよりご確認ください。\n\n■請求書番号：{number}\n■ご請求金額：{amount}\n■お支払期限：{due}\n\n{url}\n\nお手数ですが、期限までにお振込みくださいますようお願い申し上げます。\n\n――――――――――\n{issuer}\n{issuer_tel}\n{issuer_email}',
+  mail_subject: '{item}の請求書送付のご案内',
+  mail_body: '{client}\n\nいつもお世話になっております。\n{title}の請求書をお送りいたしますのでご査収の程よろしくお願いいたします。\n下記のリンクよりご確認ください。\n\n■請求書番号：{number}\n■ご請求金額：{amount}\n■お支払期限：{due}\n\n{url}\n\nお手数ですが、期限までにお振込みくださいますようお願い申し上げます。\n\n――――――――――\n{issuer}\n{issuer_tel}',
   // シービーエムの請求書の品名 → 価格表の商品名（最初の値）
   cbm_product_alias: "{\"リフィルリボン(黒)詰替用YRR-5840-BL\": \"リフィルリボン黒 YRR-5840-BL\", \"ハーフリフィルリボン(黒)詰替用YRR-3040-BL\": \"ハーフリフィルリボン黒 YRR-3040-BL\", \"感熱紙(カンサナロー、DTAヨウ)\": \"感熱紙(監査ナロー、DTA用)\", \"GC31KHブラック\": \"トナー GC31 ブラック\", \"GC31YHイエロー\": \"トナー GC31 ブラック以外\", \"GC31CHシアン\": \"トナー GC31 ブラック以外\", \"GC31MHマゼンタ\": \"トナー GC31 ブラック以外\", \"GC42KHブラック\": \"トナー GC42 ブラック\", \"ペン本体(黒)KY-012362-3\": \"マーキングペン(黒)KY-012362-3\", \"替芯(18本)+補充インキ(黒18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(赤18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(青18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(緑18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(黄土色18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\"}",
   cbm_store_map: '{}',
@@ -53,6 +53,8 @@ export const store = {
     this.db.settings = this.db.settings || {};
     await this.splitCbmConsul();
     await this.arrangeBusinesses();
+    // メールの件名・本文を新しい文面にそろえる（最初の1回だけ。そのあと設定で変えた文面はそのまま使う）
+    if (this.setting('mail_tpl') !== '2') await this.saveSettings({ mail_subject: DEFAULT_SETTINGS.mail_subject, mail_body: DEFAULT_SETTINGS.mail_body, mail_tpl: '2' });
   },
 
   // 事業の並びと名前をそろえる（最初の1回だけ）：スマート介護・CBM・コンサル・不動産賃貸・節電・節水・その他
@@ -96,7 +98,7 @@ export const store = {
     const v = this.invoice(id); if (!v) return null;
     const c = this.client(v.client_id) || {};
     return { ...v, client_name: c.name || '（取引先なし）', honorific: c.honorific || '', contact: c.contact || '', client_email: c.email || '', client_cc: c.cc || '',
-      client_postal: c.postal || '', client_address: c.address || '', payer_kana: c.payer_kana || '', corp_name: c.corp_name || '', client_rep: c.representative || '' };
+      client_postal: c.postal || '', client_address: c.address || '', payer_kana: c.payer_kana || '', corp_name: c.corp_name || '', client_rep: c.representative || '', merge_items: Number(c.merge_items) === 1 ? 1 : 0 };
   },
 
   /* ---- 書く ---- */

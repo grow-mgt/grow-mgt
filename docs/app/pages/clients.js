@@ -133,6 +133,7 @@ export function clientEditPage(arg) {
       <input name="payer_kana" value="${h(c.payer_kana)}" placeholder="カ）マルマルヤツキヨク">
       <small>通帳に表示される名義です。入金照合で使います。複数ある場合はカンマ区切り。</small>
     </label>
+    <label class="span2 check"><input type="checkbox" name="merge_items"${Number(c.merge_items) === 1 ? ' checked' : ''}> 請求書の明細は、取引日を出さず、同じ商品を店ごとに1行にまとめる</label>
     <label class="span2">メモ<textarea name="memo" rows="2">${h(c.memo)}</textarea></label>
   </div>
 
@@ -196,6 +197,7 @@ ${c.id ? '<div class="danger-zone"><button class="btn danger small" id="delClien
         if (v.email !== '' && !isEmail(v.email)) { showFlash('メールアドレスの形式が正しくありません。', 'err'); return; }
         const rule = form.price_rule ? form.price_rule.value : (c.price_rule || '');
 
+        v.merge_items = form.merge_items.checked ? 1 : 0;
         const target = c.id ? Object.assign(store.client(c.id), v) : { id: store.newId(), ...v, created_at: nowUtc(), sheet_note: '', source: 'app', price_rule: '', price_rule_amount: 0 };
         if (!lk && form.price_rule) {
           target.price_rule = ['', 'cost', 'cost_plus', 'cost_all'].includes(rule) ? rule : '';
