@@ -26,7 +26,7 @@ const bizForm = (b) => `
         ${[...Array(28).keys()].map((i) => `<option value="${i + 1}"${Number(b.due_day) === i + 1 ? ' selected' : ''}>${i + 1}日</option>`).join('')}
       </select><small>入金消込の事業で使います</small></label>` : ''}
     </div>
-    <button class="btn small">${b ? '保存' : '事業を追加'}</button>
+    ${b ? '' : '<button class="btn small">事業を追加</button>'}
   </form>`;
 
 const staffRow = (s) => `<tr>
@@ -146,8 +146,6 @@ ${store.backend.kind !== 'firestore' ? `
         }
         go('settings');
       }));
-      // 今ある事業は、「使い方」や期日を選び直したら、その場で保存する（下の「保存」を押し忘れても反映されるように）
-      root.querySelectorAll('[data-biz-form]:not(.new) select').forEach((el) => el.addEventListener('change', () => el.form.requestSubmit()));
 
       // 担当者
       const stBody = root.querySelector('#staff tbody');
@@ -197,6 +195,15 @@ ${store.backend.kind !== 'firestore' ? `
         if (v.seal_image !== '' && (!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v.seal_image) || v.seal_image.length > 48000)) { showFlash('印影の画像を読み込めませんでした。もう少し小さい画像（PNGかJPEG）で試してください。', 'err'); return; }
         if (v.reg_no !== '' && !/^T\d{13}$/.test(v.reg_no)) { showFlash('登録番号は「T＋13桁の数字」で入力してください。', 'err'); return; }
         v.staff = JSON.stringify(list);
+        // 事業の欄（名前・使い方・振込先・期日）も、この「保存」でまとめて保存する
+        const bizChanges = [];
+        for (const bf of root.querySelectorAll('[data-biz-form]:not(.new)')) {
+          const b = store.bizOf(Number(bf.dataset.bizForm)), name = bf.biz_name.value.trim();
+          if (name === '') { showFlash('事業の名前を入れてください。', 'err'); return; }
+          const nv = { name, kind: bf.biz_kind.value === 'reconcile' ? 'reconcile' : 'invoice', bank: bf.biz_bank.value.trim(), due_day: Math.max(0, Math.min(31, Number(bf.biz_due_day.value) || 0)) };
+          if (Object.keys(nv).some((k) => String(b[k] ?? '') !== String(nv[k]))) bizChanges.push({ ...b, ...nv });
+        }
+        for (const b of bizChanges) await store.saveBusiness(b);
         await store.saveSettings(v);
         flash('設定を保存しました。'); go('settings');
       });
