@@ -52,6 +52,25 @@ export const store = {
     for (const k of ['businesses', 'clients', 'products', 'clientPrices', 'recurring', 'cbmLines', 'invoices', 'catalog']) this.db[k] = this.db[k] || [];
     this.db.settings = this.db.settings || {};
     await this.splitCbmConsul();
+    await this.arrangeBusinesses();
+  },
+
+  // 事業の並びと名前をそろえる（最初の1回だけ）：スマート介護・CBM・コンサル・不動産賃貸・節電・節水・その他
+  async arrangeBusinesses() {
+    if (this.setting('biz_layout') === '2' || !this.db.businesses.length) return;
+    const order = ['スマート介護', 'CBM', 'コンサル', '不動産賃貸', '節電・節水', 'その他'];
+    const cbm = this.db.businesses.find((b) => b.name === 'CBM');
+    if (!cbm) return; // 事業の名前を変えてあるときは、何もしない
+    const land = this.db.businesses.find((b) => b.name === '不動産賃貸業');
+    if (land) await this.saveBusiness({ ...land, name: '不動産賃貸' });
+    if (!this.db.businesses.some((b) => b.name === 'その他')) {
+      await this.saveBusiness({ ...cbm, id: Math.max(...this.db.businesses.map((b) => b.id)) + 1, name: 'その他', kind: 'invoice' }); // 口座はCBMと同じ
+    }
+    for (const b of [...this.db.businesses]) {
+      const i = order.indexOf(b.name), sort = i >= 0 ? i + 1 : order.length + 1 + (b.sort || 0);
+      if (b.sort !== sort) await this.saveBusiness({ ...b, sort });
+    }
+    await this.saveSetting('biz_layout', '2');
   },
 
   // 事業「シービーエム・コンサル」を「CBM」と「コンサル」に分ける（最初の1回だけ。請求書の振り分けは、請求書の画面で事業を変えて行う）
