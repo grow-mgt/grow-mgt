@@ -5,6 +5,7 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendP
   from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch }
   from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js';
 import { firebaseConfig } from './firebase-config.js';
 
 const COLLECTIONS = ['businesses', 'clients', 'products', 'clientPrices', 'recurring', 'invoices', 'catalog'];
@@ -19,7 +20,20 @@ export class FirestoreBackend {
     this.app = initializeApp(firebaseConfig);
     this.auth = getAuth(this.app);
     this.fs = getFirestore(this.app);
+    this.fn = getFunctions(this.app, 'asia-northeast1');
     this.packCount = 0;
+  }
+
+  /* ---- メール ---- */
+  // 送るのは Cloud Functions の sendMail（差し出し人は、設定に登録した担当者だけ）
+  async sendMail({ from, to, cc, subject, body }) {
+    try {
+      const r = await httpsCallable(this.fn, 'sendMail')({ from, to, cc: cc || '', subject, body });
+      return r.data;
+    } catch (e) {
+      if (e && e.code === 'functions/not-found') throw new Error('メール送信の仕組みが、まだFirebaseに入っていません。');
+      throw new Error(e && e.message ? e.message : 'メールを送れませんでした。');
+    }
   }
 
   /* ---- ログイン ---- */
