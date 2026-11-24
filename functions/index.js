@@ -1,6 +1,6 @@
 // メール送信（Cloud Functions）。
 // 送信サービス Brevo の鍵は Firebase のシークレット（BREVO_API_KEY）に入れる。コードには書かない。
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -24,13 +24,36 @@ function staffOf(values) {
   }
 }
 
+// 請求書を見るページの置き場所（ここ以外のリンクは、ボタンにしない）
+const ALLOWED_VIEW = ["https://grow-mgt.github.io/grow-mgt/view.html?t="];
+const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const para = (text) => esc(text.trim()).replace(/\n/g, "<br>");
+
+// 本文（文字）から、ボタンつきのHTMLメールを作る。リンクの行はボタンに置き換える
+function invoiceHtml(body, url) {
+  const lines = String(body).replace(/\r\n?/g, "\n").split("\n");
+  const at = lines.findIndex((l) => l.includes(url));
+  const before = (at >= 0 ? lines.slice(0, at) : lines).join("\n");
+  const after = at >= 0 ? lines.slice(at + 1).join("\n") : "";
+  const font = "font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif";
+  return `<!DOCTYPE html><html lang="ja"><body style="margin:0;padding:0;background:#f4f5f7;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;"><tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:8px;"><tr><td style="padding:32px 28px;${font};font-size:15px;line-height:1.8;color:#222222;">
+<div>${para(before)}</div>
+<div style="text-align:center;padding:28px 0 8px;font-weight:bold;font-size:14px;">下のボタンから請求書の内容をご確認ください。<br>PDFで保存・印刷することもできます。</div>
+<div style="text-align:center;padding:12px 0 28px;"><a href="${esc(url)}" style="display:inline-block;background:#4caf50;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px;padding:16px 44px;border-radius:999px;">請求書を確認する　›</a></div>
+${after.trim() !== "" ? `<div>${para(after)}</div>` : ""}
+<div style="border-top:1px solid #dddddd;margin-top:24px;padding-top:14px;font-size:12px;line-height:1.7;color:#777777;">ボタンが開けない場合は、下のリンクをブラウザに貼り付けてください。<br><a href="${esc(url)}" style="color:#777777;word-break:break-all;">${esc(url)}</a><br>このメールにそのまま返信すると、担当者に届きます。</div>
+</td></tr></table></td></tr></table></body></html>`;
+}
+
 exports.sendMail = onCall(
   { secrets: [BREVO_API_KEY], region: "asia-northeast1", maxInstances: 5 },
   async (request) => {
     // ログインしていない人からの送信は受け付けない
     if (!request.auth) throw new HttpsError("unauthenticated", "ログインが必要です。");
 
-    const { from, to, cc, subject, body, attachments } = request.data || {};
+    const { from, to, cc, subject, body, attachments, invoiceUrl } = request.data || {};
     const toList = splitList(to);
     const ccList = splitList(cc);
 
@@ -68,6 +91,13 @@ exports.sendMail = onCall(
       subject: subject.trim(),
       textContent: body,
     };
+    // 請求書のメール：リンクの行を「請求書を確認する」ボタンにしたHTML版も付ける（文字だけの版も一緒に送る）
+    if (invoiceUrl != null && invoiceUrl !== "") {
+      if (typeof invoiceUrl !== "string" || !ALLOWED_VIEW.some((p) => invoiceUrl.startsWith(p)) || /[\s"'<>]/.test(invoiceUrl)) {
+        throw new HttpsError("invalid-argument", "請求書のリンクが正しくありません。");
+      }
+      payload.htmlContent = invoiceHtml(body, invoiceUrl);
+    }
     if (ccList.length) payload.cc = ccList.map((email) => ({ email }));
     if (files.length) payload.attachment = files.map((f) => ({ name: f.name, content: f.content }));
 
@@ -85,5 +115,51 @@ exports.sendMail = onCall(
     }
     const data = await res.json();
     return { ok: true, messageId: data.messageId || null };
+  }
+);
+
+// 先方が請求書を見るページ（view.html）に、その請求書1枚分のデータを渡す。ログイン不要。リンクの合言葉（token）を知っている人だけが見られる
+exports.viewInvoice = onRequest(
+  { region: "asia-northeast1", maxInstances: 5, cors: ["https://grow-mgt.github.io"] },
+  async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const t = String(req.query.t || "");
+    if (req.method !== "GET" || !/^[a-f0-9]{32,64}$/.test(t)) { res.status(400).json({ error: "リンクが正しくありません。" }); return; }
+    const db = admin.firestore();
+    const snap = await db.collection("invoices").where("token", "==", t).limit(1).get();
+    if (snap.empty) { res.status(404).json({ error: "請求書が見つかりません。リンクをもう一度お確かめください。" }); return; }
+    const ref = snap.docs[0].ref, inv = snap.docs[0].data();
+    if (inv.status === "draft") { res.status(404).json({ error: "この請求書は、まだ発行されていません。" }); return; }
+
+    const [cSnap, bSnap, values] = await Promise.all([
+      db.doc("clients/" + inv.client_id).get(),
+      db.doc("businesses/" + (inv.business_id || 1)).get(),
+      loadSettings(),
+    ]);
+    const c = cSnap.exists ? cSnap.data() : {};
+    const b = bSnap.exists ? bSnap.data() : {};
+
+    // 開いた記録を残す（送付済み → 開封済み）
+    try {
+      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const upd = { open_count: admin.firestore.FieldValue.increment(1) };
+      if (!inv.opened_at) upd.opened_at = now;
+      if (inv.status === "sent") {
+        upd.status = "opened";
+        upd.events = admin.firestore.FieldValue.arrayUnion({ id: Date.now() * 1000, type: "open", detail: "先方が請求書を開きました", created_at: now });
+      }
+      await ref.update(upd);
+    } catch (e) { console.error("open mark failed", e); }
+
+    const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k] == null ? "" : o[k]]));
+    res.json({
+      invoice: {
+        ...pick(inv, ["number", "title", "issue_date", "due_date", "notes", "withholding", "tax_mode", "business_id", "status"]),
+        items: (inv.items || []).map((it) => pick(it, ["name", "qty", "unit", "price", "tax_rate", "product_id", "item_date", "ship_to"])),
+        client_name: c.name || "", honorific: c.honorific || "", corp_name: c.corp_name || "", merge_items: Number(c.merge_items) === 1 ? 1 : 0,
+      },
+      settings: pick(values, ["company", "representative", "reg_no", "postal", "address", "tel", "fax", "email", "seal_image", "bank"]),
+      business: { id: inv.business_id || 1, bank: b.bank || "" },
+    });
   }
 );

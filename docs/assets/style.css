@@ -248,13 +248,6 @@ body.public { background: #e9ebef; padding-bottom: 40px; }
   .grid2, .grid3, .grid4 { grid-template-columns: 1fr; }
   .span2, .span3 { grid-column: auto; }
   .filters input { width: 100%; margin: 6px 0 0; }
-  .doc { padding: 28px 16px; font-size: 12px; }
-  .doc-parties { flex-direction: column; }
-  .doc .from { padding-top: 0; }
-  .doc-foot { flex-direction: column; }
-  .doc-sum, .doc-tax { width: 100%; }
-  .doc-items td { padding: 6px 6px; }
-  .doc-items .c-qty { width: 56px; } .doc-items .c-price, .doc-items .c-amt { width: 76px; } .doc-items .c-date { width: 88px; }
   .public-bar { padding: 12px; }
   .preview { padding: 0; }
 }
@@ -431,23 +424,21 @@ input.warn-input { border-color: #f0a3a3; background: #fff; }
 .doc-bank .label { font-size: 11px; letter-spacing: .15em; color: #777; margin-bottom: 6px; }
 .doc-bank .box { background: #f7f7f7; border-left: 3px solid #bbb; padding: 14px 16px; font-size: 14px; }
 .doc .to .corp, .doc-parties { margin-bottom: 36px; }
-/* 明細が多いので1ページに収める */
-@media print {
-  .doc { font-size: 12.5px; }
-  .doc-title { font-size: 28px; margin: 14px 0 22px; padding-bottom: 10px; }
-  .doc .to .client { font-size: 18px; }
-  .doc .amount-box { padding: 10px 16px; margin: 12px 0 10px; }
-  .doc .amount-box b { font-size: 22px; }
-  .doc-parties { margin-bottom: 22px; }
-  .doc-items th { font-size: 12px; padding: 6px 10px; }
-  .doc-items td { font-size: 12.5px; padding: 4px 10px; height: auto; }
-  .doc-items tr.sec td { font-size: 12.5px; padding: 4px 10px; }
-  .doc-foot { margin-top: 12px; }
-  .doc-tax th, .doc-tax td, .doc-sum th, .doc-sum td { font-size: 12.5px; padding: 6px 10px; }
-  .doc-sum .grand th, .doc-sum .grand td { font-size: 14px; }
-  .doc-bank { margin-top: 14px; }
-  .doc-bank .box { font-size: 13px; padding: 10px 14px; }
-}
+/* 明細が多いので1ページに収める（画面の表示も、印刷と同じ大きさ・同じ折り返しにする） */
+.doc { font-size: 12.5px; }
+.doc-title { font-size: 28px; margin: 14px 0 22px; padding-bottom: 10px; }
+.doc .to .client { font-size: 18px; }
+.doc .amount-box { padding: 10px 16px; margin: 12px 0 10px; }
+.doc .amount-box b { font-size: 22px; }
+.doc-parties { margin-bottom: 22px; }
+.doc-items th { font-size: 12px; padding: 6px 10px; }
+.doc-items td { font-size: 12.5px; padding: 4px 10px; height: auto; }
+.doc-items tr.sec td { font-size: 12.5px; padding: 4px 10px; }
+.doc-foot { margin-top: 12px; }
+.doc-tax th, .doc-tax td, .doc-sum th, .doc-sum td { font-size: 12.5px; padding: 6px 10px; }
+.doc-sum .grand th, .doc-sum .grand td { font-size: 14px; }
+.doc-bank { margin-top: 14px; }
+.doc-bank .box { font-size: 13px; padding: 10px 14px; }
 
 /* 未完成の下書き（価格未設定）は、行の左に黄色の帯を付けて分かりやすくする */
 tr.row-incomplete td { background: #fff8e6; }
@@ -480,3 +471,13 @@ th.sortable[data-dir="desc"]::after { content: " ▼"; font-size: 10px; }
 .doc .to .client { font-weight: 500; white-space: nowrap; }
 .form label.check { display: flex; align-items: center; gap: 8px; }
 .form label.check input { width: auto; }
+
+/* 請求書は、画面でもA4の紙と同じ幅（余白 12mm・14mm）で組み、入りきらないときは全体を縮めて見せる。折り返しの位置は印刷と同じ */
+.doc { width: 794px; max-width: none; padding: 45px 53px; font-size: 12.5px; zoom: var(--doc-zoom, 1); }
+.preview { overflow: hidden; }
+@media print { .doc { zoom: 1 !important; width: 100%; padding: 0; } }
+
+/* 先方が請求書を見るページ */
+.view-sheet { max-width: 794px; margin: 0 auto; overflow: hidden; }
+.view-sheet .doc { box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+@media print { .view-sheet { max-width: none; overflow: visible; } }

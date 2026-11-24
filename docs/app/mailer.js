@@ -2,6 +2,7 @@
 //  - プレビュー：送らない（送ったことにして、画面の流れだけ確かめる）
 //  - 本番：Cloud Functions の sendMail を呼ぶ（Firebaseのプロジェクトができてからつなぐ）
 import { store } from './store.js';
+import { publicUrl } from './logic.js';
 
 const isEmail = (s) => /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(s);
 
@@ -12,5 +13,6 @@ export async function sendMail({ from, to, cc, subject, body, invoice, attachmen
   }
   if (store.isPreview) return { ok: true, simulated: true };
   if (!store.backend.sendMail) throw new Error('メール送信は、まだFirebaseにつないでいません。');
-  return store.backend.sendMail({ from, to, cc, subject, body, invoiceId: invoice && invoice.id, attachments: attachments || [] });
+  return store.backend.sendMail({ from, to, cc, subject, body, invoiceId: invoice && invoice.id, attachments: attachments || [],
+    invoiceUrl: invoice ? publicUrl(invoice) : '' }); // 請求書のメールは、リンクを「請求書を確認する」ボタンにして送る
 }

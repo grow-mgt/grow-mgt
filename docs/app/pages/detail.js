@@ -2,7 +2,7 @@
 import { store } from '../store.js';
 import { go, setBiz } from '../nav.js';
 import { isReconcile, statusBadge, setInvoiceStatus, refreshPaymentStatus, fillTemplate, publicUrl, STATUS_LABELS } from '../logic.js';
-import { renderInvoiceDoc } from '../doc.js';
+import { renderInvoiceDoc, fitDocs } from '../doc.js';
 import { sendMail } from '../mailer.js';
 import { staffList } from './settings.js';
 import { h, yen, nf, nl2br, jdate, jdatetime, slashDate, today, nowUtc, isYmd, num, randomToken } from '../util.js';
@@ -134,6 +134,7 @@ ${irec ? '' : `
       const raw = store.invoice(id); // 保存するのは、取引先の情報を足す前の請求書そのもの
       const save = async (msg, type = 'ok') => { await store.saveInvoice(raw); flash(msg, type); go('invoice-' + id); };
       const on = (sel, ev, fn) => { const el = root.querySelector(sel); if (el) el.addEventListener(ev, fn); };
+      fitDocs(root);
 
       root.querySelector('.crumb a').addEventListener('click', () => setBiz(IB.id));
 

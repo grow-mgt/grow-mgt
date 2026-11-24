@@ -1,6 +1,6 @@
 // PDF保存用：選んだ請求書を1つずつ改ページして並べる（今までの print_bulk.php と同じ）
 import { store } from '../store.js';
-import { renderInvoiceDoc } from '../doc.js';
+import { renderInvoiceDoc, fitDocs } from '../doc.js';
 import { h } from '../util.js';
 
 export function printPage(ids) {
@@ -17,6 +17,7 @@ export function printPage(ids) {
       </div>
       <div style="background:#fff">${invs.map((v) => `<div class="pb">${renderInvoiceDoc(v)}</div>`).join('')}</div>`,
     mount(root) {
+      fitDocs(root);
       root.querySelector('#doPrint').addEventListener('click', () => {
         if (store.isPreview) { root.querySelector('#printMsg').textContent = 'プレビューの中では印刷画面を開けません。本番では、ここで印刷（PDF保存）の画面が開きます。'; return; }
         window.print();

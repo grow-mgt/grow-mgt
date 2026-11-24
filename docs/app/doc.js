@@ -64,7 +64,7 @@ export function renderInvoiceDoc(inv) {
   const toName = String(inv.corp_name || '').trim() !== '' ? inv.corp_name : inv.client_name;
   const toSub = (toName !== inv.client_name && !hasShip) ? inv.client_name : '';
 
-  const fit = fitSize(toName + ' ' + inv.honorific, 20, 356, 10);
+  const fit = fitSize(toName + ' ' + inv.honorific, 18, 356, 10);
 
   let rows = '';
   for (const [g, list] of groups) {
@@ -141,4 +141,19 @@ export function renderInvoiceDoc(inv) {
   </div>
   ${inv.notes ? `<div class="doc-bank"><p class="label">備考</p><div class="box">${nl2br(inv.notes)}</div></div>` : ''}
 </article>`;
+}
+
+// 画面の幅に合わせて、請求書（A4の幅で組んだもの）を縮めて見せる。印刷のときは実寸
+export function fitDocs(root) {
+  const docs = [...root.querySelectorAll('.doc')];
+  if (!docs.length) return;
+  const apply = () => {
+    for (const d of docs) {
+      const box = d.parentElement, cs = getComputedStyle(box);
+      const w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (w > 0) d.style.setProperty('--doc-zoom', String(Math.min(1, Math.floor(w / 794 * 1000) / 1000)));
+    }
+  };
+  apply();
+  if (typeof ResizeObserver !== 'undefined') { const ro = new ResizeObserver(apply); for (const d of docs) ro.observe(d.parentElement); }
 }
