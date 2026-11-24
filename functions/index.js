@@ -35,15 +35,16 @@ function invoiceHtml(body, url) {
   const at = lines.findIndex((l) => l.includes(url));
   const before = (at >= 0 ? lines.slice(0, at) : lines).join("\n");
   const after = at >= 0 ? lines.slice(at + 1).join("\n") : "";
-  const font = "font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif";
-  return `<!DOCTYPE html><html lang="ja"><body style="margin:0;padding:0;background:#f4f5f7;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;"><tr><td align="center" style="padding:24px 12px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:8px;"><tr><td style="padding:32px 28px;${font};font-size:15px;line-height:1.8;color:#222222;">
-<div>${para(before)}</div>
-<div style="text-align:center;padding:28px 0 8px;font-weight:bold;font-size:14px;">下のボタンから請求書の内容をご確認ください。<br>PDFで保存・印刷することもできます。</div>
-<div style="text-align:center;padding:12px 0 28px;"><a href="${esc(url)}" style="display:inline-block;background:#2f6fde;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px;padding:15px 44px;border-radius:999px;">請求書を確認する</a></div>
-${after.trim() !== "" ? `<div>${para(after)}</div>` : ""}
-<div style="border-top:1px solid #dddddd;margin-top:24px;padding-top:14px;font-size:12px;line-height:1.7;color:#777777;">ボタンが開けない場合は、下のリンクをブラウザに貼り付けてください。<br><a href="${esc(url)}" style="color:#777777;word-break:break-all;">${esc(url)}</a><br>このメールにそのまま返信すると、担当者に届きます。</div>
+  // 書体はゴシック体（端末の標準の書体）。メールソフトによっては指定が引き継がれないので、すべての部品に直接付ける
+  const ff = "font-family:-apple-system,BlinkMacSystemFont,Helvetica Neue,Hiragino Sans,Hiragino Kaku Gothic ProN,Yu Gothic,Meiryo,Arial,sans-serif;";
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body,table,td,div,p,a,span{${ff}}</style></head><body style="margin:0;padding:0;background:#f4f5f7;${ff}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;${ff}"><tr><td align="center" style="padding:24px 12px;${ff}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:8px;${ff}"><tr><td style="padding:32px 28px;${ff}font-size:15px;line-height:1.8;color:#222222;">
+<div style="${ff}">${para(before)}</div>
+<div style="${ff}text-align:center;padding:28px 0 8px;font-weight:bold;font-size:14px;">下のボタンから請求書の内容をご確認ください。<br>PDFで保存・印刷することもできます。</div>
+<div style="${ff}text-align:center;padding:12px 0 28px;"><a href="${esc(url)}" style="${ff}display:inline-block;background:#2f6fde;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px;padding:15px 44px;border-radius:999px;">請求書を確認する</a></div>
+${after.trim() !== "" ? `<div style="${ff}">${para(after)}</div>` : ""}
+<div style="${ff}border-top:1px solid #dddddd;margin-top:24px;padding-top:14px;font-size:12px;line-height:1.7;color:#777777;">ボタンが開けない場合は、下のリンクをブラウザに貼り付けてください。<br><a href="${esc(url)}" style="${ff}color:#777777;word-break:break-all;">${esc(url)}</a><br>このメールにそのまま返信すると、担当者に届きます。</div>
 </td></tr></table></td></tr></table></body></html>`;
 }
 
