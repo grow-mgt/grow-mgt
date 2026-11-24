@@ -1,0 +1,203 @@
+// 設定（今までの settings.php のうち、事業・発行元の情報・メールの文面・請求書の初期値）
+import { store } from '../store.js';
+import { go } from '../nav.js';
+import { h, isEmail } from '../util.js';
+import { flash, showFlash } from '../ui.js';
+
+const KEYS = ['company', 'representative', 'postal', 'address', 'tel', 'fax', 'email', 'reg_no', 'bank', 'seal_image', 'number_style', 'mail_from_name', 'due_days', 'number_prefix', 'mail_subject', 'mail_body'];
+const toHalf = (s) => String(s).replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
+
+// 担当者（メールの差し出し人）。設定の中に [{name, email}] の形で持つ
+export function staffList() {
+  try { const a = JSON.parse(store.setting('staff') || '[]'); return Array.isArray(a) ? a.filter((x) => x && x.email) : []; } catch (e) { return []; }
+}
+
+const bizForm = (b) => `
+  <form class="biz-form${b ? '' : ' new'}" data-biz-form="${b ? b.id : 0}">
+    <div class="grid4">
+      <label>${b ? '事業の名前' : '新しい事業の名前'}<input name="biz_name" value="${b ? h(b.name) : ''}"${b ? '' : ' placeholder="例：〇〇事業"'}></label>
+      <label>使い方<select name="biz_kind">
+        <option value="invoice"${!b || b.kind !== 'reconcile' ? ' selected' : ''}>請求書を発行する</option>
+        <option value="reconcile"${b && b.kind === 'reconcile' ? ' selected' : ''}>入金の消し込みだけ</option>
+      </select></label>
+      <label class="span2">振込先${b ? '（この事業の口座）' : ''}<input name="biz_bank" value="${b ? h(b.bank) : ''}"${b ? ' placeholder="〇〇銀行 〇〇支店 普通 0000000 カ）グロウ"' : ''}></label>
+      ${b ? `<label>毎月の入金予定の期日<select name="biz_due_day">
+        <option value="0"${Number(b.due_day) === 0 ? ' selected' : ''}>月末</option>
+        ${[...Array(28).keys()].map((i) => `<option value="${i + 1}"${Number(b.due_day) === i + 1 ? ' selected' : ''}>${i + 1}日</option>`).join('')}
+      </select><small>入金消込の事業で使います</small></label>` : ''}
+    </div>
+    <button class="btn small">${b ? '保存' : '事業を追加'}</button>
+  </form>`;
+
+const staffRow = (s) => `<tr>
+  <td><input class="sname" value="${h(s.name || '')}" placeholder="山田 太郎"></td>
+  <td><input class="semail" type="email" value="${h(s.email || '')}" placeholder="yamada@example.co.jp"></td>
+  <td><button type="button" class="icon sdel" title="この行を削除">×</button></td></tr>`;
+
+export function settingsPage() {
+  const s = store.settings();
+  const staff = staffList();
+  const html = `
+<h1>設定</h1>
+<section class="card form" id="biz">
+  <h2>事業</h2>
+  <p class="small muted">GROWの事業ごとに、振込先の口座と使い方を決めます。「入金の消し込みだけ」の事業は、請求書を送らずに入金予定と銀行の入金を突き合わせます。銀行CSVの列の設定は、入金照合の画面で事業ごとに覚えます。</p>
+  <div class="biz-forms">${store.businesses().map(bizForm).join('')}${bizForm(null)}</div>
+</section>
+
+<form class="card form" id="mainForm">
+  <h2>請求書に載せる発行元の情報（GROW共通）</h2>
+  <div class="grid2">
+    <label>会社名・屋号<input name="company" value="${h(s.company)}"></label>
+    <label>代表者名・担当者名<input name="representative" value="${h(s.representative)}" placeholder="代表取締役 〇〇 〇〇"></label>
+    <label>郵便番号<input name="postal" value="${h(s.postal)}"></label>
+    <label>電話番号<input name="tel" value="${h(s.tel)}"></label>
+    <label>FAX番号<input name="fax" value="${h(s.fax)}"></label>
+    <label class="span2">住所<textarea name="address" rows="2">${h(s.address)}</textarea></label>
+    <label>問い合わせ先メール<input type="email" name="email" value="${h(s.email)}"></label>
+    <label>適格請求書発行事業者の登録番号<input name="reg_no" value="${h(s.reg_no)}" placeholder="T1234567890123" class="mono"></label>
+    <label class="span2">お振込先（事業の口座が未設定のときに使う）<textarea name="bank" rows="2" placeholder="〇〇銀行 〇〇支店 普通 0000000 カ）〇〇">${h(s.bank)}</textarea></label>
+    <div class="span2 seal-field">
+      <span class="lbl">印影（請求書の右上に入るハンコの画像）</span>
+      <div class="seal-row">
+        <img id="sealPrev" src="${h(s.seal_image)}" alt=""${s.seal_image === '' ? ' hidden' : ''}>
+        <input type="file" id="sealFile" accept="image/png,image/jpeg,image/webp">
+        <button type="button" class="btn small" id="sealDel"${s.seal_image === '' ? ' hidden' : ''}>消す</button>
+      </div>
+      <small>背景が白か透明のハンコの画像（PNG・JPEG）。自動で小さくして保存します。</small>
+      <input type="hidden" name="seal_image" id="sealData" value="${h(s.seal_image)}">
+    </div>
+  </div>
+
+  <h2>メール送信</h2>
+  <p class="small muted">メールは、担当者のアドレスを差し出し人にして送ります。お客様の返信も、その担当者に届きます。送るときに担当者を選びます。</p>
+  <div class="table-wrap">
+  <table class="items" id="staff">
+    <thead><tr><th>担当者の名前</th><th>メールアドレス（差し出し人・返信先）</th><th></th></tr></thead>
+    <tbody>${[...staff, {}].map(staffRow).join('')}</tbody>
+  </table>
+  </div>
+  <button type="button" class="btn small" id="addStaff">＋ 担当者を追加</button>
+  <div class="grid2 mt">
+    <label>差出人名<input name="mail_from_name" value="${h(s.mail_from_name)}" placeholder="空欄なら会社名"></label>
+    <label class="check"><input type="checkbox" name="mail_bcc_self" value="1"${s.mail_bcc_self === '1' ? ' checked' : ''}> 送ったメールの控えを、担当者にも届ける（BCC）</label>
+    <label class="span2">メールの件名<input name="mail_subject" value="${h(s.mail_subject)}"></label>
+    <label class="span2">メールの本文<textarea name="mail_body" rows="14" class="mono">${h(s.mail_body)}</textarea>
+      <small>差し込める項目：{client} 取引先名、{contact} ご担当者、{number} 請求書番号、{title} 件名、{amount} 金額、{due} 期限、{url} 請求書リンク、{issuer} 自社名、{issuer_tel}、{issuer_email}</small></label>
+  </div>
+
+  <h2>請求書の初期値</h2>
+  <div class="grid2">
+    <label>請求書番号の形<select name="number_style">
+      <option value="date"${s.number_style !== 'prefix' ? ' selected' : ''}>発行日＋通し番号（例：20261102-15）</option>
+      <option value="prefix"${s.number_style === 'prefix' ? ' selected' : ''}>頭の文字＋年月＋番号（例：INV-202611-001）</option>
+    </select></label>
+    <label>番号の頭につける文字<input name="number_prefix" value="${h(s.number_prefix)}" class="mono"><small>「頭の文字＋年月＋番号」のときに使います</small></label>
+    <label>お支払期限<select name="due_days">
+      ${Object.entries({ 0: '翌月末', 7: '発行日から7日後', 14: '発行日から14日後', 30: '発行日から30日後', 60: '発行日から60日後' }).map(([k, l]) => `<option value="${k}"${String(s.due_days) === k ? ' selected' : ''}>${l}</option>`).join('')}
+    </select><small>手で請求書を作るときの初期値です。シービーエムの明細と固定の請求は、いつも翌月末になります。</small></label>
+  </div>
+  <div class="actions"><button class="btn primary">保存</button></div>
+</form>
+
+${store.backend.kind !== 'firestore' ? `
+<section class="card">
+  <h2>本番へ移すデータを書き出す</h2>
+  <p class="small muted">このプレビューに入っているデータ（取引先・商品・請求書・設定など）を、本番（Firebase）へ移すためにコピーします。コピーしたものは、本番のアプリを最初に開いたときの「最初のデータを取り込む」に貼り付けます。取引先の情報が入っているので、ほかの場所には貼らないでください。</p>
+  <div class="btn-row"><button class="btn primary" id="exportData">データをコピーする</button><span class="small muted" id="exportMsg"></span></div>
+  <textarea id="exportText" class="code" rows="4" readonly hidden></textarea>
+</section>` : ''}
+
+<section class="card">
+  <h2>これからつなぐもの</h2>
+  <p class="small muted">次の設定は、Firebaseにつないだあとにここへ入ります。今までのアプリにあった機能は、形を変えて引き継ぎます。</p>
+  <ul class="small">
+    <li><b>顧客情報スプレッドシートの読み込み</b>（契約先・価格表）：今は、読み込み済みの内容で動いています。</li>
+    <li><b>スプレッドシートへのバックアップ</b>：今は、このプレビューの保存先にデータを置いています。</li>
+    <li><b>メールの送信テスト</b>：送信サービスにつないだあとに使えます。</li>
+    <li><b>ログイン</b>：パスワードの代わりに、担当者ごとのログインになります。</li>
+  </ul>
+</section>`;
+
+  return {
+    title: '設定', active: 'settings', bizTabs: false, html,
+    mount(root) {
+      const ex = root.querySelector('#exportData');
+      if (ex) ex.addEventListener('click', async () => {
+        const text = JSON.stringify(store.db), msg = root.querySelector('#exportMsg');
+        const count = `請求書${store.db.invoices.length}件・取引先${store.db.clients.length}件・商品${store.db.products.length}件`;
+        try { await navigator.clipboard.writeText(text); msg.textContent = 'コピーしました（' + count + '）。'; }
+        catch (err) { const ta = root.querySelector('#exportText'); ta.hidden = false; ta.value = text; ta.select(); msg.textContent = '自動でコピーできませんでした。下の枠の中をすべて選んでコピーしてください（' + count + '）。'; }
+      });
+      // 事業
+      root.querySelectorAll('[data-biz-form]').forEach((f) => f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = Number(f.dataset.bizForm), name = f.biz_name.value.trim();
+        const kind = f.biz_kind.value === 'reconcile' ? 'reconcile' : 'invoice', bank = f.biz_bank.value.trim();
+        if (name === '') { showFlash('事業の名前を入れてください。', 'err'); return; }
+        if (id) {
+          const day = Math.max(0, Math.min(31, Number(f.biz_due_day.value) || 0));
+          await store.saveBusiness(Object.assign(store.bizOf(id), { name, kind, bank, due_day: day }));
+          flash('「' + name + '」を保存しました。');
+        } else {
+          const all = store.db.businesses;
+          await store.saveBusiness({ id: Math.max(0, ...all.map((b) => b.id)) + 1, name, kind, bank, csv_date_col: '', csv_amount_col: '', csv_name_col: '', csv_skip_rows: '1', due_day: 0, sort: Math.max(0, ...all.map((b) => b.sort || 0)) + 1 });
+          flash('事業「' + name + '」を追加しました。');
+        }
+        go('settings');
+      }));
+
+      // 担当者
+      const stBody = root.querySelector('#staff tbody');
+      root.querySelector('#addStaff').onclick = () => stBody.insertAdjacentHTML('beforeend', staffRow({}));
+      stBody.addEventListener('click', (e) => { if (e.target.classList.contains('sdel')) { if (stBody.rows.length > 1) e.target.closest('tr').remove(); else e.target.closest('tr').querySelectorAll('input').forEach((i) => { i.value = ''; }); } });
+
+      // 印影：長い辺を240pxにして、文字数が多すぎないように保存する
+      const file = root.querySelector('#sealFile'), data = root.querySelector('#sealData'), prev = root.querySelector('#sealPrev'), del = root.querySelector('#sealDel');
+      file.addEventListener('change', () => {
+        const f = file.files[0]; if (!f) return;
+        const img = new Image();
+        img.onload = () => {
+          let size = 240, url = '';
+          for (let i = 0; i < 4; i++) {
+            const sc = Math.min(1, size / Math.max(img.width, img.height));
+            const c = document.createElement('canvas');
+            c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            url = c.toDataURL('image/png');
+            if (url.length > 46000) url = c.toDataURL('image/jpeg', 0.85);
+            if (url.length <= 46000) break;
+            size = Math.round(size * 0.75);
+          }
+          data.value = url; prev.src = url; prev.hidden = false; del.hidden = false;
+          URL.revokeObjectURL(img.src);
+        };
+        img.onerror = () => showFlash('印影の画像を読み込めませんでした。PNGかJPEGの画像で試してください。', 'err');
+        img.src = URL.createObjectURL(f);
+      });
+      del.addEventListener('click', () => { data.value = ''; prev.hidden = true; del.hidden = true; file.value = ''; });
+
+      // 保存
+      root.querySelector('#mainForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target, v = {};
+        for (const k of KEYS) v[k] = String(f[k].value || '').trim();
+        v.mail_bcc_self = f.mail_bcc_self.checked ? '1' : '0';
+        v.reg_no = toHalf(v.reg_no).toUpperCase();
+        v.number_prefix = v.number_prefix.replace(/[^A-Za-z0-9-]/g, '') || 'INV';
+        const list = [];
+        for (const tr of stBody.rows) {
+          const name = tr.querySelector('.sname').value.trim(), email = tr.querySelector('.semail').value.trim();
+          if (name === '' && email === '') continue;
+          if (!isEmail(email)) { showFlash('担当者のメールアドレスの形式が正しくありません：' + (email || name), 'err'); return; }
+          list.push({ name, email });
+        }
+        if (v.seal_image !== '' && (!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v.seal_image) || v.seal_image.length > 48000)) { showFlash('印影の画像を読み込めませんでした。もう少し小さい画像（PNGかJPEG）で試してください。', 'err'); return; }
+        if (v.reg_no !== '' && !/^T\d{13}$/.test(v.reg_no)) { showFlash('登録番号は「T＋13桁の数字」で入力してください。', 'err'); return; }
+        v.staff = JSON.stringify(list);
+        await store.saveSettings(v);
+        flash('設定を保存しました。'); go('settings');
+      });
+    },
+  };
+}

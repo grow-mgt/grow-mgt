@@ -1,0 +1,6 @@
+# 取引先・請求書などのデータは、ここには置かない
+preview-data/
+docs/data/
+*.sqlite
+node_modules/
+.env*

@@ -1,0 +1,10 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ログインした担当者だけが読み書きできる（アカウントは管理者がFirebaseの画面で追加する。外部からの登録は止めてある）
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
