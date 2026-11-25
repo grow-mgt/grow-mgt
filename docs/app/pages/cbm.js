@@ -22,6 +22,7 @@ async function confirmRebuild(tab) {
 }
 
 export function cbmPage() {
+  cbm.fixStoreMap(); // 名前で覚えている対応を、取引先の番号に直しておく（取引先の名前を変えても切れないように）
   if (!work.lines) return loadPage();
   return planPage();
 }

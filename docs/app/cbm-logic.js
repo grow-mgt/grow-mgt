@@ -50,6 +50,17 @@ export function similarPct(s1, s2) {
 /* ---------- 対応表 ---------- */
 const json = (key) => { try { return JSON.parse(store.setting(key) || '{}') || {}; } catch (e) { return {}; } };
 export const storeMap = () => json('cbm_store_map');
+/** 店名の対応表のうち、名前で入っているものを取引先の番号に直す（最初の1回と、古いデータ用）。直した数を返す */
+export async function fixStoreMap() {
+  const map = storeMap(); let n = 0;
+  for (const [k, v] of Object.entries(map)) {
+    if (v === 'skip' || isIntLike(v)) continue;
+    const id = clientIdByName(String(v).replace(/^name:/, ''));
+    if (id) { map[k] = id; n++; }
+  }
+  if (n) await store.saveSetting('cbm_store_map', JSON.stringify(map));
+  return n;
+}
 export const productAlias = () => json('cbm_product_alias');
 const isIntLike = (v) => typeof v === 'number' || /^\d+$/.test(String(v));
 const clientIdByName = (name) => { const c = store.db.clients.find((x) => x.name === name); return c ? c.id : null; };
@@ -177,7 +188,9 @@ export async function ensureClients(lines) {
         group_name: '', corp_name: '', representative: '', billing_method: '', sheet_note: '', source: 'app', price_rule: '', price_rule_amount: 0, business_id: 1 });
       made++;
     }
-    if (map[st] !== name) { map[st] = name; changed = true; }
+    // 対応表には取引先の番号（id）を入れる。名前で覚えると、あとで取引先の名前を変えたときに結び付きが切れて、取引先が二重にできてしまう
+    const cidNew = clientIdByName(name);
+    if (cidNew && map[st] !== cidNew) { map[st] = cidNew; changed = true; }
   }
   if (changed) await store.saveSetting('cbm_store_map', JSON.stringify(map));
   return made;
