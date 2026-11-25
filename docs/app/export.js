@@ -18,7 +18,9 @@ function toBase64(text) {
 }
 
 /** CSVで書き出す（プレビューの中ではファイルを保存できないので、貼り付けられる形でコピーする） */
+const NO_EXPORT = 'CSVの書き出しと送信は、管理者だけができます。必要なときは管理者に頼んでください。';
 export async function exportCsv(table, filename) {
+  if (!store.canExport()) { showFlash(NO_EXPORT, 'err'); return; }
   if (store.isPreview) {
     try { await navigator.clipboard.writeText(table.map((r) => r.join('\t')).join('\n')); showFlash('表をコピーしました。スプレッドシートやExcelに貼り付けてください。（本番ではCSVファイルで保存されます）'); }
     catch (err) { showFlash('コピーできませんでした。', 'err'); }
@@ -31,6 +33,7 @@ export async function exportCsv(table, filename) {
 
 /** CSVを添付してメールで送る（小窓）。files：[{name, table}] */
 export function mailCsv({ title, files, subject, body }) {
+  if (!store.canExport()) { showFlash(NO_EXPORT, 'err'); return; }
   const staff = staffList();
   if (!staff.length) { showFlash('差し出し人にする担当者が未登録です。設定の「メール送信」で登録してください。', 'err'); return; }
   let last = ''; try { last = localStorage.getItem('grow-mgt-sender') || ''; } catch (e) { last = ''; }

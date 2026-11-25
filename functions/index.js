@@ -11,6 +11,15 @@ const BREVO_API_KEY = defineSecret("BREVO_API_KEY");
 const isEmail = (s) => typeof s === "string" && /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(s);
 const splitList = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
+// 管理者（CSVやバックアップを書き出せる人）か。名簿は meta/admins の emails
+async function isAdmin(auth) {
+  const email = String((auth && auth.token && auth.token.email) || "").toLowerCase();
+  if (!email) return false;
+  const snap = await admin.firestore().doc("meta/admins").get();
+  const list = snap.exists ? snap.data().emails || [] : [];
+  return list.map((x) => String(x).toLowerCase()).includes(email);
+}
+
 // 設定画面に登録してある担当者（差し出し人にできるのは、この人たちだけ）
 async function loadSettings() {
   const snap = await admin.firestore().doc("settings/main").get();
@@ -70,6 +79,7 @@ exports.sendMail = onCall(
 
     // 添付（CSVなど）：3つまで、合わせて約3MBまで
     const files = Array.isArray(attachments) ? attachments : [];
+    if (files.length && !(await isAdmin(request.auth))) throw new HttpsError("permission-denied", "ファイルを添付して送れるのは、管理者だけです。");
     if (files.length > 3) throw new HttpsError("invalid-argument", "添付は3つまでにしてください。");
     let size = 0;
     for (const f of files) {
@@ -203,6 +213,7 @@ exports.backups = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "ログインが必要です。");
     const { action, name } = request.data || {};
+    if (!(await isAdmin(request.auth))) throw new HttpsError("permission-denied", "バックアップを扱えるのは、管理者だけです。");
     const bucket = admin.storage().bucket(BACKUP_BUCKET);
     if (action === "run") return makeBackup(request.auth.token.email || "アプリから");
     if (action === "list") {

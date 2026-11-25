@@ -86,6 +86,9 @@ export const store = {
     await this.saveBusiness({ ...old, id: Math.max(...this.db.businesses.map((b) => b.id)) + 1, name: 'コンサル', sort: old.sort + 1 });
   },
 
+  // CSVやバックアップを書き出せる人か（本番は管理者だけ。プレビューは誰でも）
+  canExport() { return this.backend.kind !== 'firestore' || this.backend.isAdmin(); },
+
   /* ---- 読む ---- */
   setting(key) { const v = this.db.settings[key]; return v != null ? String(v) : String(DEFAULT_SETTINGS[key] ?? ''); },
   settings() { return { ...DEFAULT_SETTINGS, ...this.db.settings }; },

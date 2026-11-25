@@ -108,9 +108,17 @@ ${store.backend.kind !== 'firestore' ? `
   <textarea id="exportText" class="code" rows="4" readonly hidden></textarea>
 </section>` : ''}
 
+${store.backend.kind === 'firestore' ? `
+<section class="card form" id="admins">
+  <h2>管理者（データを書き出せる人）</h2>
+  <p class="small muted">CSVの書き出し・CSVのメール送信・バックアップの実行とダウンロードは、ここに登録した人だけができます。ログインに使うメールアドレスを、1行に1つずつ入れてください。${store.canExport() ? '' : '（この欄を変えられるのは管理者だけです）'}</p>
+  <textarea id="adminList" rows="4" class="mono"${store.canExport() ? '' : ' readonly'}>${h(store.backend.admins.join('\n'))}</textarea>
+  ${store.canExport() ? '<div class="btn-row"><button type="button" class="btn" id="adminSave">管理者を保存</button></div>' : ''}
+</section>` : ''}
+
 <section class="card" id="backup">
   <h2>バックアップ</h2>
-  ${store.backend.kind === 'firestore' ? `
+  ${store.backend.kind === 'firestore' && !store.canExport() ? `<p class="small muted">毎日3時（日本時間）に、すべてのデータを自動でバックアップしています。バックアップの実行とダウンロードは、管理者だけができます。</p>` : store.backend.kind === 'firestore' ? `
   <p class="small muted">毎日3時（日本時間）に、すべてのデータ（取引先・商品・単価・請求書・明細・設定など）を1つのファイルにして、Googleのクラウドの別の場所に保存しています。保存したファイルは90日間残り、そのあと古いものから自動で消えます。</p>
   <p id="bkLast" class="small">最後のバックアップ：確認しています…</p>
   <div class="btn-row"><button type="button" class="btn" id="bkRun">今すぐバックアップする</button><button type="button" class="btn" id="bkList">保存したファイルを見る</button><span class="small muted" id="bkMsg"></span></div>
@@ -128,8 +136,19 @@ ${store.backend.kind !== 'firestore' ? `
         try { await navigator.clipboard.writeText(text); msg.textContent = 'コピーしました（' + count + '）。'; }
         catch (err) { const ta = root.querySelector('#exportText'); ta.hidden = false; ta.value = text; ta.select(); msg.textContent = '自動でコピーできませんでした。下の枠の中をすべて選んでコピーしてください（' + count + '）。'; }
       });
-      // バックアップ（本番だけ）
-      if (store.backend.kind === 'firestore') {
+      // 管理者の名簿
+      const adminSave = root.querySelector('#adminSave');
+      if (adminSave) adminSave.addEventListener('click', async () => {
+        const list = root.querySelector('#adminList').value.split(/[\n,、\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+        const bad = list.find((x) => !isEmail(x));
+        if (bad) { showFlash('メールアドレスの形式が正しくありません：' + bad, 'err'); return; }
+        const me = String(store.backend.userEmail() || '').toLowerCase();
+        if (!list.includes(me)) { showFlash('自分（' + me + '）を管理者から外すことはできません。ほかの管理者に外してもらってください。', 'err'); return; }
+        try { await store.backend.saveAdmins(list); flash('管理者を保存しました（' + list.length + '人）。'); go('settings'); }
+        catch (e) { showFlash('管理者を保存できませんでした。', 'err'); }
+      });
+      // バックアップ（本番だけ・管理者だけ）
+      if (store.backend.kind === 'firestore' && store.canExport()) {
         const be = store.backend, msg = root.querySelector('#bkMsg'), last = root.querySelector('#bkLast'), list = root.querySelector('#bkFiles');
         const kb = (n) => (n / 1024).toFixed(n < 10240 ? 1 : 0) + 'KB';
         const fileLabel = (n) => { const m = /^backup_(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})\.json$/.exec(n); return m ? `${m[1]}年${Number(m[2])}月${Number(m[3])}日 ${m[4]}:${m[5]}` : n; };

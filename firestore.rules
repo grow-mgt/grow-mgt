@@ -3,8 +3,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ログインした担当者だけが読み書きできる（アカウントは管理者がFirebaseの画面で追加する。外部からの登録は止めてある）
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    function signedIn() { return request.auth != null; }
+    // 管理者（CSVやバックアップを書き出せる人）の名簿：meta/admins の emails
+    function adminsPath() { return /databases/$(database)/documents/meta/admins; }
+    function isAdmin() { return signedIn() && exists(adminsPath()) && request.auth.token.email in get(adminsPath()).data.emails; }
+
+    match /{col}/{docId} {
+      allow read: if signedIn();
+      // 管理者の名簿だけは、下の専用の決まりでしか書けない
+      allow write: if signedIn() && !(col == 'meta' && docId == 'admins');
+    }
+    match /{col}/{docId}/{rest=**} {
+      allow read, write: if signedIn();
+    }
+    // 名簿を書き換えられるのは管理者だけ（まだ名簿がないときだけ、最初の1人が作れる）
+    match /meta/admins {
+      allow write: if isAdmin() || (signedIn() && !exists(adminsPath()));
     }
   }
 }

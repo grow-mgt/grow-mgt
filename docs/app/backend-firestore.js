@@ -22,6 +22,15 @@ export class FirestoreBackend {
     this.fs = getFirestore(this.app);
     this.fn = getFunctions(this.app, 'asia-northeast1');
     this.packCount = 0;
+    this.admins = [];
+  }
+
+  /* ---- 管理者（CSV・バックアップを書き出せる人） ---- */
+  isAdmin() { return this.admins.includes(String(this.userEmail() || '').toLowerCase()); }
+  async saveAdmins(emails) {
+    const list = [...new Set(emails.map((x) => String(x).trim().toLowerCase()).filter(Boolean))];
+    await setDoc(doc(this.fs, 'meta', 'admins'), { emails: list, updated_at: new Date().toISOString(), updated_by: this.userEmail() });
+    this.admins = list;
   }
 
   /* ---- バックアップ ---- */
@@ -68,6 +77,8 @@ export class FirestoreBackend {
     COLLECTIONS.forEach((c, i) => { out[c] = snaps[i].docs.map((d) => d.data()); });
     const st = await getDoc(doc(this.fs, 'settings', 'main'));
     if (st.exists()) out.settings = st.data().values || {};
+    const ad = await getDoc(doc(this.fs, 'meta', 'admins'));
+    this.admins = ad.exists() ? (ad.data().emails || []).map((x) => String(x).toLowerCase()) : [];
     const ps = await getDocs(collection(this.fs, 'cbmPacks'));
     this.packCount = ps.size;
     out.cbmLines = ps.docs.map((d) => d.data()).sort((a, b) => a.n - b.n).flatMap((p) => p.lines || []);
