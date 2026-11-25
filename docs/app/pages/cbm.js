@@ -140,7 +140,7 @@ function planPage() {
   const errs = [];
   for (const [sname, s] of pl.stores) if (!s.client_id) errs.push(`「${sname}」は取引先に登録されていません（${s.lines}行）。取引先を作って、未完成の下書きにします。`);
   for (const inv of pl.invoices.values()) if (inv.missing > 0) errs.push(`「${inv.client_name}」は価格が未設定です（${inv.missing}行）。未完成の下書きにします（価格は0円）。価格を入れたら「未完成を作り直す」を押してください。`);
-  const labels = { alias: '対応表', exact: '同じ名前', code: '品番が一致（要確認）', none: '新しい商品' };
+  const labels = { alias: '対応表', exact: '同じ名前', code: '名前は違いますが、品番が同じなので下の商品と判断しました。合っていれば何もしなくて大丈夫です。違うときだけ、左で選び直して保存してください。', none: '新しい商品' };
   const td = today();
 
   const html = `
@@ -167,27 +167,29 @@ ${(() => {
 
 <form id="mapForm">
   <details class="card"${needStore ? ' open' : ''}>
-    <summary><b>店名の対応表</b> <span class="muted small">管理表の卸先名 → 請求先</span>${needStore ? ` <span class="badge b-overdue">確認が必要 ${needStore}件</span>` : ''}</summary>
+    <summary><b>店名の対応表</b> <span class="muted small">明細の卸先名 → 請求先</span>${needStore ? ` <span class="badge b-overdue">確認が必要 ${needStore}件</span>` : ''}</summary>
     <div class="table-wrap mt">
     <table class="list small map">
-      <thead><tr><th>管理表の卸先名</th><th class="r">行数</th><th>請求先の取引先</th></tr></thead>
+      <thead><tr><th>明細の卸先名</th><th class="r">行数</th><th>請求先の取引先</th><th>確認すること</th></tr></thead>
       ${[...pl.stores].map(([name, s]) => `
         <tr class="${needsStore(s) ? 'need' : ''}">
           <td>${h(name)}</td><td class="r">${s.lines}</td>
           <td><select data-store="${h(name)}">
             <option value="">${s.client_id && s.client_id !== 'skip' ? '自動：' + h(cname(s.client_id)) : '（選んでください）'}</option>
             <option value="skip"${s.client_id === 'skip' ? ' selected' : ''}>請求しない</option>
-            ${allClients.map((c) => `<option value="${c.id}"${s.how === 'map' && s.client_id === c.id ? ' selected' : ''}>${h(c.name)}</option>`).join('')}
+            ${allClients.map((c) => `<option value="${c.id}"${(s.how === 'map' || s.how === 'guess') && s.client_id === c.id ? ' selected' : ''}>${h(c.name)}</option>`).join('')}
           </select></td>
+          <td class="small">${s.how === 'guess' ? `名前が少し違うので、似ている「${h(cname(s.client_id))}」を選んであります。<b>合っていれば、下の「対応表を保存して作り直す」を押してください</b>（次からは聞きません）。違うときは選び直してください。`
+            : (!s.client_id ? '取引先に登録がありません。請求先を選んで保存してください。選ばずに進むと、この名前で取引先を新しく作ります。' : '')}</td>
         </tr>`).join('')}
     </table>
     </div>
   </details>
   <details class="card"${needItem ? ' open' : ''}>
-    <summary><b>商品名の対応表</b> <span class="muted small">管理表の品名 → 価格表の商品</span>${needItem ? ` <span class="badge b-partial">確認 ${needItem}件</span>` : ''}</summary>
+    <summary><b>商品名の対応表</b> <span class="muted small">明細の品名 → 価格表の商品</span>${needItem ? ` <span class="badge b-partial">確認 ${needItem}件</span>` : ''}</summary>
     <div class="table-wrap mt">
     <table class="list small map">
-      <thead><tr><th>管理表の品名</th><th class="r">仕入単価</th><th>価格表の商品</th><th>判定</th></tr></thead>
+      <thead><tr><th>明細の品名</th><th class="r">仕入単価</th><th>価格表の商品</th><th>判定</th></tr></thead>
       ${[...pl.items].map(([name, it]) => `
         <tr class="${it.how === 'code' ? 'need' : ''}">
           <td>${h(name)}</td><td class="r">${it.cost != null ? nf(it.cost) : ''}</td>
@@ -221,11 +223,11 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
   ${[...pl.invoices].map(([cid, inv]) => { const d = done.get(cid); const rc = recOf(cid); return `
     <section class="card plan${inv.missing ? ' has-missing' : ''}">
       <div class="plan-head">
-        <label class="check"><input type="checkbox" name="make" value="${cid}"${d ? '' : ' checked'}> <b>${h(inv.client_name)}</b></label>
+        <label class="check"><input type="checkbox" name="make" value="${cid}"${d && !(d.status === 'draft' && d.incomplete === 1) ? '' : ' checked'}> <b>${h(inv.client_name)}</b></label>
         <span class="muted small">${inv.lines.length}行${inv.show_ship ? '・納品先 ' + inv.stores.size + '店' : ''}</span>
         <span class="plan-total">税抜 ${yen(inv.subtotal)}${inv.cost ? ` <span class="muted small">（仕入 ${yen(inv.cost)}／粗利 ${yen(inv.subtotal - inv.cost)}）</span>` : ''}</span>
         ${rc.length ? `<span class="badge b-opened">＋月額固定 ${rc.length}行 ${yen(rc.reduce((a, r) => a + r.qty * r.price, 0))}</span>` : ''}
-        ${d ? `<span class="badge b-sent">作成済み <a href="#invoice-${d.id}">${h(d.number)}</a></span>` : ''}
+        ${d ? `<span class="badge b-sent">作成済み <a href="#invoice-${d.id}">${h(d.number)}</a></span>${d.status !== 'draft' ? ' <span class="small muted">送付済みのため作り直しません</span>' : (d.incomplete === 1 ? ' <span class="small muted">未完成の下書きなので、作り直します</span>' : '')}` : ''}
         ${inv.missing ? `<span class="badge b-overdue">単価が未設定 ${inv.missing}行</span>` : ''}
       </div>
       <div class="table-wrap">
@@ -247,7 +249,7 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
 
   ${done.size ? '<label class="check small"><input type="checkbox" name="again" value="1"> 作成済みの取引先も、もう一度作る</label>' : ''}
   <div class="actions sticky-actions">
-    <span class="muted small">単価が未設定の行は0円で作られます。下書きなので、送る前に直せます。</span>
+    <span class="muted small">単価を入れた取引先と、未完成の下書きは、作成済みでも作り直します。単価が未設定の行は0円で作られます。</span>
     <button class="btn primary">チェックした請求書の下書きを作る</button>
   </div>
 </form>`;
@@ -265,6 +267,10 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
         return out;
       };
 
+      // 単価を手で入れたら、その取引先を作る対象にする（作成済みの下書きも作り直す）
+      root.querySelectorAll('section.plan input[data-key]').forEach((i) => i.addEventListener('input', () => {
+        const box = i.closest('section.plan').querySelector('input[name="make"]'); if (box && !box.disabled) box.checked = true;
+      }));
       root.querySelector('#resetCbm').addEventListener('click', () => { Object.assign(work, { tab: '', lines: null, over: {} }); go('cbm'); });
       root.querySelector('#rebuildCbm').addEventListener('click', async () => {
         if (!(await confirmRebuild(tab))) return;
@@ -303,13 +309,16 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
         const p2 = cbm.plan(lines, over);
         // チェックを外した取引先は作らない。取引先を作ったばかりのものは対象にする
         const unchecked = new Set([...f.querySelectorAll('input[name="make"]:not(:checked)')].map((c) => Number(c.value)));
+        const skipped = [];
         const ids = await cbm.create(tab, p2, {
+          skipped,
           clients: [...p2.invoices.keys()].filter((cid) => !unchecked.has(cid)),
           title: f.title.value.trim(), issue: f.issue_date.value, due: f.due_date.value, notes: f.notes.value.trim(),
           remember: f.remember.checked, again: !!(f.again && f.again.checked), recurring: f.recurring.checked,
         });
         Object.assign(work, { tab: '', lines: null, over: {} });
-        flash(ids.length ? ids.length + '件の請求書の下書きを作りました。内容を確認して送ってください。' : '作った請求書はありません（すでに作成済みか、チェックがありません）。', ids.length ? 'ok' : 'warn');
+        flash((ids.length ? ids.length + '件の請求書の下書きを作りました（作り直しを含みます）。内容を確認して送ってください。' : '作った請求書はありません（すでに作成済みか、チェックがありません）。')
+          + (skipped.length ? ' 送付済みの請求書は作り直していません：' + skipped.join('、') : ''), ids.length ? 'ok' : 'warn');
         toDrafts();
       });
     },

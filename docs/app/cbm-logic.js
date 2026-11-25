@@ -14,7 +14,8 @@ const kataToHira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.c
 export function normName(s) {
   s = kataToHira(kanaToFull(toHalfAscii(String(s)))).toLowerCase();
   s = s.replace(/[/／].*$/u, ''); // 「〇〇薬局/△△」の「/△△」など
-  return s.replace(/[\s　・.\-－‐()（）]/gu, '');
+  // 空白・記号と、長音（ー）の書き方のちがい（－ ‐ ― - ｰ）は無視して比べる
+  return s.replace(/[\s　・.\-－‐―−ｰー()（）]/gu, '');
 }
 export function normProduct(s) {
   return kanaToFull(toHalfAscii(String(s))).toLowerCase().replace(/[\s　]/gu, '');
@@ -220,7 +221,7 @@ export function plan(lines, overrides = {}) {
     const inv = out.invoices.get(cid);
     inv.stores.add(l.store);
     inv.lines.push({ key, store: l.store, date: l.date, raw: l.name, qty: l.qty, cbm_cost: l.cost, product_id: pid, product_name: pid ? store.product(pid).name : '',
-      price: over ? overrides[key] : info.price, from: over ? '手入力' : info.from, note: l.note || '' });
+      price: over ? overrides[key] : info.price, from: over ? '手入力' : info.from, note: l.note || '', auto_price: info.price });
   });
   for (const inv of out.invoices.values()) {
     inv.show_ship = inv.stores.size > 1; // 納品先が2店以上あるときだけ、納品先を明細に出す
@@ -255,14 +256,18 @@ export async function create(tab, pl, opt) {
     if (!opt.clients.includes(cid)) continue;
     const ref = refOf(tab, cid);
     const existing = store.db.invoices.find((v) => v.source_ref === ref);
-    if (existing && !opt.again) continue;
+    // すでにある請求書：送付済みなどは決して書き換えない。下書きは、未完成のもの・単価を手で入れたもの・「もう一度作る」のときだけ作り直す
+    const manual = inv.lines.some((l) => l.from === '手入力');
+    if (existing && existing.status !== 'draft') { if (opt.skipped) opt.skipped.push(existing.number); continue; }
+    if (existing && !(opt.again || existing.incomplete === 1 || manual)) continue;
     const items = [];
     for (const l of inv.lines) {
       let tax = 10, unit = '個';
       const pr = l.product_id ? store.product(l.product_id) : null;
       if (pr) { tax = Number(pr.tax_rate); unit = pr.unit ? pr.unit : '個'; }
       items.push({ name: l.product_name || l.raw, qty: l.qty, unit, price: Math.trunc(l.price || 0), tax_rate: tax, product_id: l.product_id, item_date: l.date, ship_to: inv.show_ship ? l.store : '' });
-      if (opt.remember && l.from === '手入力' && l.product_id && l.price != null) await store.setClientPrice(cid, l.product_id, Math.trunc(l.price));
+      // 手で入れた単価を覚える：チェックがあるとき。単価がまだ決まっていなかった商品は、いつも覚える（次の月に、また未設定にならないように）
+      if ((opt.remember || l.auto_price == null) && l.from === '手入力' && l.product_id && l.price != null) await store.setClientPrice(cid, l.product_id, Math.trunc(l.price));
     }
     // 月額固定（コンサルティングフィーなど）を「その他」に足す
     if (opt.recurring) {
