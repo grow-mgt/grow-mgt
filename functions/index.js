@@ -11,21 +11,13 @@ const BREVO_API_KEY = defineSecret("BREVO_API_KEY");
 const isEmail = (s) => typeof s === "string" && /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(s);
 const splitList = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
-// 管理者（CSVやバックアップを書き出せる人）か。名簿は meta/admins の emails
-async function isAdmin(auth) {
+// 権限の名簿（meta/access）で、その人にチェックが入っているか。key：edit, send, del, settings, export, backup, roles
+async function can(auth, key) {
   const email = String((auth && auth.token && auth.token.email) || "").toLowerCase();
   if (!email) return false;
-  const snap = await admin.firestore().doc("meta/admins").get();
-  const list = snap.exists ? snap.data().emails || [] : [];
-  return list.map((x) => String(x).toLowerCase()).includes(email);
-}
-
-// 閲覧だけの人（税理士など）か。名簿は meta/viewers の emails
-async function isViewer(auth) {
-  const email = String((auth && auth.token && auth.token.email) || "").toLowerCase();
-  const snap = await admin.firestore().doc("meta/viewers").get();
-  const list = snap.exists ? snap.data().emails || [] : [];
-  return list.map((x) => String(x).toLowerCase()).includes(email);
+  const snap = await admin.firestore().doc("meta/access").get();
+  const people = snap.exists ? snap.data().people || {} : {};
+  return !!(people[email] && people[email][key] === true);
 }
 
 // 設定画面に登録してある担当者（差し出し人にできるのは、この人たちだけ）
@@ -71,7 +63,7 @@ exports.sendMail = onCall(
   async (request) => {
     // ログインしていない人からの送信は受け付けない
     if (!request.auth) throw new HttpsError("unauthenticated", "ログインが必要です。");
-    if (await isViewer(request.auth)) throw new HttpsError("permission-denied", "閲覧だけの権限では、メールを送れません。");
+    if (!(await can(request.auth, "send"))) throw new HttpsError("permission-denied", "メール送信の権限がありません。");
 
     const { from, to, cc, subject, body, attachments, invoiceUrl } = request.data || {};
     const toList = splitList(to);
@@ -88,7 +80,7 @@ exports.sendMail = onCall(
 
     // 添付（CSVなど）：3つまで、合わせて約3MBまで
     const files = Array.isArray(attachments) ? attachments : [];
-    if (files.length && !(await isAdmin(request.auth))) throw new HttpsError("permission-denied", "ファイルを添付して送れるのは、管理者だけです。");
+    if (files.length && !(await can(request.auth, "export"))) throw new HttpsError("permission-denied", "CSVを添付して送る権限がありません。");
     if (files.length > 3) throw new HttpsError("invalid-argument", "添付は3つまでにしてください。");
     let size = 0;
     for (const f of files) {
@@ -222,7 +214,7 @@ exports.backups = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "ログインが必要です。");
     const { action, name } = request.data || {};
-    if (!(await isAdmin(request.auth))) throw new HttpsError("permission-denied", "バックアップを扱えるのは、管理者だけです。");
+    if (!(await can(request.auth, "backup"))) throw new HttpsError("permission-denied", "バックアップの権限がありません。");
     const bucket = admin.storage().bucket(BACKUP_BUCKET);
     if (action === "run") return makeBackup(request.auth.token.email || "アプリから");
     if (action === "list") {

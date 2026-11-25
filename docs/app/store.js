@@ -5,6 +5,11 @@ import { nowUtc } from './util.js';
 
 const LS_KEY = 'grow-mgt-preview-db';
 
+const NO_PERM = {
+  edit: '登録・変更の権限がないため、保存できません。', send: 'メール送信の権限がありません。', del: '削除の権限がありません。',
+  settings: '設定を変える権限がありません。', export: 'CSVを書き出す権限がありません。', backup: 'バックアップの権限がありません。', roles: '権限を変える権限がありません。',
+};
+
 // 設定の初期値（今までのアプリの default_settings と同じ）
 export const DEFAULT_SETTINGS = {
   company: '', representative: '', postal: '', address: '', tel: '', fax: '', seal_image: '',
@@ -52,7 +57,7 @@ export const store = {
     this.db = await this.backend.load();
     for (const k of ['businesses', 'clients', 'products', 'clientPrices', 'recurring', 'cbmLines', 'invoices', 'catalog']) this.db[k] = this.db[k] || [];
     this.db.settings = this.db.settings || {};
-    if (!this.canEdit()) return; // 閲覧だけの人は、下の「最初の1回だけの直し」も行わない
+    if (!(this.can('edit') && this.can('settings'))) return; // 下の「最初の1回だけの直し」は、設定を変えられる人が開いたときだけ行う
     await this.splitCbmConsul();
     await this.arrangeBusinesses();
     // メールの件名・本文を新しい文面にそろえる（最初の1回だけ。そのあと設定で変えた文面はそのまま使う）
@@ -87,12 +92,16 @@ export const store = {
     await this.saveBusiness({ ...old, id: Math.max(...this.db.businesses.map((b) => b.id)) + 1, name: 'コンサル', sort: old.sort + 1 });
   },
 
-  // 編集できる人か（閲覧だけの人＝税理士などは、見るだけ）
-  canEdit() { return !(this.backend.kind === 'firestore' && this.backend.isViewer()); },
-  // 書き換える前に確かめる。閲覧だけの人なら、ここで止める
-  guard() { if (!this.canEdit()) { const e = new Error('閲覧だけの権限のため、変更はできません。'); e.readOnly = true; throw e; } },
-  // CSVやバックアップを書き出せる人か（本番は管理者だけ。プレビューは誰でも）
-  canExport() { return this.backend.kind !== 'firestore' || this.backend.isAdmin(); },
+  // 権限：本番は、権限の名簿でチェックが入っている人だけ。プレビューは何でもできる
+  //   edit 登録・変更／send メール送信／del 削除／settings 設定の変更／export CSVの書き出し／backup バックアップ／roles 権限の変更
+  can(key) { return this.backend.kind !== 'firestore' || this.backend.can(key); },
+  canEdit() { return this.can('edit'); },
+  canExport() { return this.can('export'); },
+  // 書き換える前に確かめる。権限がなければ、ここで止める
+  guard(key = 'edit') {
+    if (this.can(key)) return;
+    const e = new Error(NO_PERM[key] || 'この操作の権限がありません。'); e.readOnly = true; throw e;
+  },
 
   /* ---- 読む ---- */
   setting(key) { const v = this.db.settings[key]; return v != null ? String(v) : String(DEFAULT_SETTINGS[key] ?? ''); },
@@ -120,7 +129,7 @@ export const store = {
     await this.backend.put(this.db, 'invoices', inv.id, inv);
   },
   async deleteInvoice(id) {
-    this.guard();
+    this.guard('del');
     this.db.invoices = this.db.invoices.filter((v) => v.id !== Number(id));
     await this.backend.remove(this.db, 'invoices', Number(id));
   },
@@ -147,12 +156,12 @@ export const store = {
     await this.backend.put(this.db, 'catalog', it.id, it);
   },
   async deleteCatalog(id) {
-    this.guard();
+    this.guard('del');
     this.db.catalog = this.db.catalog.filter((x) => x.id !== id);
     await this.backend.remove(this.db, 'catalog', id);
   },
   async saveBusiness(b) {
-    this.guard();
+    this.guard('settings');
     const i = this.db.businesses.findIndex((x) => x.id === b.id);
     if (i >= 0) this.db.businesses[i] = b; else this.db.businesses.push(b);
     await this.backend.put(this.db, 'businesses', b.id, b);
@@ -164,7 +173,7 @@ export const store = {
     await this.backend.put(this.db, 'clients', c.id, c);
   },
   async deleteClient(id) {
-    this.guard();
+    this.guard('del');
     id = Number(id);
     this.db.clients = this.db.clients.filter((c) => c.id !== id);
     await this.backend.remove(this.db, 'clients', id);
@@ -172,7 +181,7 @@ export const store = {
     await this.replaceRecurring(id, []);
   },
   async deleteProduct(id) {
-    this.guard();
+    this.guard('del');
     id = Number(id);
     this.db.products = this.db.products.filter((p) => p.id !== id);
     await this.backend.remove(this.db, 'products', id);

@@ -2,6 +2,20 @@
 import { store } from '../store.js';
 import { go } from '../nav.js';
 import { h, isEmail } from '../util.js';
+
+// 権限の種類：[記号, 表の見出し, 説明]
+const PERMS = [
+  ['edit', '登録・<br>変更', '請求書・取引先・商品・入金の登録と変更、CBMのPDF読み込み、入金消込'],
+  ['send', 'メール<br>送信', '請求書などのメールを送る'],
+  ['del', '削除', '請求書・取引先・商品を消す'],
+  ['settings', '設定の<br>変更', '会社情報・振込先の口座・印影・メールの文面・担当者・事業を変える'],
+  ['export', 'CSVの<br>書き出し', 'CSVの書き出しと、CSVをメールで送ること'],
+  ['backup', 'バック<br>アップ', 'バックアップの実行と、ファイルのダウンロード'],
+  ['roles', '権限の<br>変更', 'この表を変える'],
+];
+// 新しく足した人の最初の状態（ふだんの担当者）
+const NEW_PERSON = { name: '', edit: true, send: true, del: true, settings: true, export: false, backup: false, roles: false };
+let previewPeople = { 'tantou@example.com': { ...NEW_PERSON, name: '担当者（例）' }, 'zeirishi@example.com': { name: '税理士（例）', edit: false, send: false, del: false, settings: false, export: false, backup: false, roles: false } };
 import { flash, showFlash } from '../ui.js';
 
 const KEYS = ['company', 'representative', 'postal', 'address', 'tel', 'fax', 'email', 'reg_no', 'bank', 'seal_image', 'number_style', 'mail_from_name', 'due_days', 'number_prefix', 'mail_subject', 'mail_body'];
@@ -108,26 +122,20 @@ ${store.backend.kind !== 'firestore' ? `
   <textarea id="exportText" class="code" rows="4" readonly hidden></textarea>
 </section>` : ''}
 
-${store.backend.kind === 'firestore' ? `
 <section class="card form" id="admins">
-  <h2>権限</h2>
-  <h2 style="margin-top:6px">管理者（データを書き出せる人）</h2>
-  <p class="small muted">CSVの書き出し・CSVのメール送信・バックアップの実行とダウンロードは、ここに登録した人だけができます。ログインに使うメールアドレスを、1行に1つずつ入れてください。${store.canExport() ? '' : '（この欄を変えられるのは管理者だけです）'}</p>
-  <textarea id="adminList" rows="4" class="mono"${store.canExport() ? '' : ' readonly'}>${h(store.backend.admins.join('\n'))}</textarea>
-  <h2 style="margin-top:18px">閲覧だけの人（税理士など）</h2>
-  <p class="small muted">ここに登録した人は、すべての画面を見られますが、登録・変更・削除・メール送信・CSVの書き出しはできません。ログインに使うメールアドレスを、1行に1つずつ入れてください。ここにも管理者にも登録していない人は、編集（請求書の作成・送信）ができる担当者です。</p>
-  <textarea id="viewerList" rows="3" class="mono"${store.canExport() ? '' : ' readonly'}>${h(store.backend.viewers.join('\n'))}</textarea>
-  ${store.canExport() ? '<div class="btn-row"><button type="button" class="btn" id="adminSave">権限を保存</button></div>' : ''}
-  <table class="list small mt"><thead><tr><th>権限</th><th>できること</th><th>だれ</th></tr></thead><tbody>
-    <tr><td>閲覧</td><td>すべての画面を見る</td><td>上の「閲覧だけの人」</td></tr>
-    <tr><td>編集</td><td>閲覧に加えて、取引先・商品・請求書の登録と変更、メール送信、入金照合</td><td>ログインできる人のうち、閲覧だけの人以外</td></tr>
-    <tr><td>書き出し</td><td>編集に加えて、CSVの書き出し・CSVメール・バックアップ、この権限の変更</td><td>上の「管理者」</td></tr>
+  <h2>権限（人ごとに、できることを決める）</h2>
+  <p class="small muted">ログインできる人のメールアドレスを登録して、できることにチェックを入れます。新しく足した人は「ふだんの担当者」の状態（登録・変更、メール送信、削除、設定の変更にチェック）で始まるので、必要なところだけ変えてください。<br>
+  すべてのチェックを外すと「見るだけ」の人（税理士など）になります。ここに登録していない人も「見るだけ」です。${store.backend.kind === 'firestore' ? '' : '<br><b>このプレビューでは、画面の確認だけができます（保存されず、実際の制限もかかりません）。</b>'}</p>
+  <div style="overflow-x:auto"><table class="list small" id="permTable"><thead><tr><th>メールアドレス</th><th>名前（メモ）</th>${PERMS.map((x) => `<th style="text-align:center" title="${h(x[2])}">${x[1]}</th>`).join('')}<th></th></tr></thead><tbody></tbody></table></div>
+  ${store.can('roles') ? '<div class="btn-row"><button type="button" class="btn" id="permAdd">＋ 人を足す</button><button type="button" class="btn" id="permSave">権限を保存</button></div>' : '<p class="small muted">権限を変えられるのは、「権限の変更」にチェックがある人だけです。</p>'}
+  <table class="list small mt"><thead><tr><th>チェック</th><th>できること</th></tr></thead><tbody>
+    ${PERMS.map((x) => `<tr><td>${x[1].replace('<br>', '')}</td><td>${h(x[2])}</td></tr>`).join('')}
   </tbody></table>
-</section>` : ''}
+</section>
 
 <section class="card" id="backup">
   <h2>バックアップ</h2>
-  ${store.backend.kind === 'firestore' && !store.canExport() ? `<p class="small muted">毎日3時（日本時間）に、すべてのデータを自動でバックアップしています。バックアップの実行とダウンロードは、管理者だけができます。</p>` : store.backend.kind === 'firestore' ? `
+  ${store.backend.kind === 'firestore' && !store.can('backup') ? `<p class="small muted">毎日3時（日本時間）に、すべてのデータを自動でバックアップしています。バックアップの実行とダウンロードは、管理者だけができます。</p>` : store.backend.kind === 'firestore' ? `
   <p class="small muted">毎日3時（日本時間）に、すべてのデータ（取引先・商品・単価・請求書・明細・設定など）を1つのファイルにして、Googleのクラウドの別の場所に保存しています。保存したファイルは90日間残り、そのあと古いものから自動で消えます。</p>
   <p id="bkLast" class="small">最後のバックアップ：確認しています…</p>
   <div class="btn-row"><button type="button" class="btn" id="bkRun">今すぐバックアップする</button><button type="button" class="btn" id="bkList">保存したファイルを見る</button><span class="small muted" id="bkMsg"></span></div>
@@ -145,24 +153,43 @@ ${store.backend.kind === 'firestore' ? `
         try { await navigator.clipboard.writeText(text); msg.textContent = 'コピーしました（' + count + '）。'; }
         catch (err) { const ta = root.querySelector('#exportText'); ta.hidden = false; ta.value = text; ta.select(); msg.textContent = '自動でコピーできませんでした。下の枠の中をすべて選んでコピーしてください（' + count + '）。'; }
       });
-      // 管理者の名簿
-      const adminSave = root.querySelector('#adminSave');
-      if (adminSave) adminSave.addEventListener('click', async () => {
-        const list = root.querySelector('#adminList').value.split(/[\n,、\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
-        const bad = list.find((x) => !isEmail(x));
-        if (bad) { showFlash('メールアドレスの形式が正しくありません：' + bad, 'err'); return; }
-        const me = String(store.backend.userEmail() || '').toLowerCase();
-        if (!list.includes(me)) { showFlash('自分（' + me + '）を管理者から外すことはできません。ほかの管理者に外してもらってください。', 'err'); return; }
-        const vlist = root.querySelector('#viewerList').value.split(/[\n,、\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
-        const vbad = vlist.find((x) => !isEmail(x));
-        if (vbad) { showFlash('メールアドレスの形式が正しくありません：' + vbad, 'err'); return; }
-        const both = vlist.find((x) => list.includes(x));
-        if (both) { showFlash('「' + both + '」が、管理者と閲覧だけの人の両方に入っています。どちらか片方にしてください。', 'err'); return; }
-        try { await store.backend.saveAdmins(list); await store.backend.saveViewers(vlist); flash('権限を保存しました（管理者' + list.length + '人・閲覧だけ' + vlist.length + '人）。'); go('settings'); }
+      // 権限の名簿
+      const tb = root.querySelector('#permTable tbody'), canRoles = store.can('roles');
+      const me = String((store.backend.userEmail && store.backend.userEmail()) || '').toLowerCase();
+      const permRow = (email, v, isNew) => `<tr>
+        <td><input type="email" class="mono" data-p="email" value="${h(email)}" placeholder="name@example.com" style="min-width:210px"${canRoles && isNew ? '' : ' readonly'}></td>
+        <td><input type="text" data-p="name" value="${h(v.name || '')}" style="min-width:110px"${canRoles ? '' : ' readonly'}></td>
+        ${PERMS.map((x) => `<td style="text-align:center"><input type="checkbox" data-p="${x[0]}"${v[x[0]] === true ? ' checked' : ''}${canRoles ? '' : ' disabled'}></td>`).join('')}
+        <td class="r">${canRoles && email !== me ? '<button type="button" class="btn small" data-perm-del>外す</button>' : ''}</td></tr>`;
+      const people = store.backend.kind === 'firestore' ? store.backend.people : previewPeople;
+      tb.innerHTML = Object.keys(people).sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b))).map((k) => permRow(k, people[k], false)).join('')
+        || '<tr class="perm-empty"><td colspan="10" class="muted">まだ登録がありません。</td></tr>';
+      const permAdd = root.querySelector('#permAdd');
+      if (permAdd) permAdd.addEventListener('click', () => {
+        const em = tb.querySelector('.perm-empty'); if (em) em.remove();
+        tb.insertAdjacentHTML('beforeend', permRow('', { ...NEW_PERSON }, true));
+        tb.lastElementChild.querySelector('input').focus();
+      });
+      tb.addEventListener('click', (e) => { const b = e.target.closest('[data-perm-del]'); if (b) b.closest('tr').remove(); });
+      const permSave = root.querySelector('#permSave');
+      if (permSave) permSave.addEventListener('click', async () => {
+        const next = {};
+        for (const tr of tb.querySelectorAll('tr:not(.perm-empty)')) {
+          const email = tr.querySelector('[data-p=email]').value.trim().toLowerCase();
+          if (!email) continue;
+          if (!isEmail(email)) { showFlash('メールアドレスの形式が正しくありません：' + email, 'err'); return; }
+          if (next[email]) { showFlash('同じメールアドレスが2回入っています：' + email, 'err'); return; }
+          const v = { name: tr.querySelector('[data-p=name]').value.trim() };
+          PERMS.forEach((x) => { v[x[0]] = tr.querySelector(`[data-p=${x[0]}]`).checked; });
+          next[email] = v;
+        }
+        if (store.backend.kind !== 'firestore') { previewPeople = next; showFlash('（プレビュー）権限の表を確認しました。本番では、ここで保存されます。'); return; }
+        if (!next[me] || !next[me].roles) { showFlash('自分（' + me + '）の「権限の変更」のチェックは外せません。外すと、だれも権限を変えられなくなることがあるためです。', 'err'); return; }
+        try { await store.backend.savePeople(next); flash('権限を保存しました（' + Object.keys(next).length + '人）。'); location.reload(); }
         catch (e) { showFlash('権限を保存できませんでした。', 'err'); }
       });
       // バックアップ（本番だけ・管理者だけ）
-      if (store.backend.kind === 'firestore' && store.canExport()) {
+      if (store.backend.kind === 'firestore' && store.can('backup')) {
         const be = store.backend, msg = root.querySelector('#bkMsg'), last = root.querySelector('#bkLast'), list = root.querySelector('#bkFiles');
         const kb = (n) => (n / 1024).toFixed(n < 10240 ? 1 : 0) + 'KB';
         const fileLabel = (n) => { const m = /^backup_(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})\.json$/.exec(n); return m ? `${m[1]}年${Number(m[2])}月${Number(m[3])}日 ${m[4]}:${m[5]}` : n; };
@@ -253,6 +280,7 @@ ${store.backend.kind === 'firestore' ? `
       // 保存
       root.querySelector('#mainForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        store.guard('settings');
         const f = e.target, v = {};
         for (const k of KEYS) v[k] = String(f[k].value || '').trim();
         v.mail_bcc_self = f.mail_bcc_self.checked ? '1' : '0';

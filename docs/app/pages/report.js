@@ -147,7 +147,7 @@ ${bid && clients.length ? `
       root.querySelectorAll('[data-basis]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); sel.basis = a.dataset.basis; go('report'); }));
       root.querySelectorAll('[data-rbiz]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); const f = state.filter, q = state.q; setBiz(a.dataset.rbiz); state.filter = f; state.q = q; go('report'); }));
       root.querySelector('#csvOut').addEventListener('click', async () => {
-        if (!store.canExport()) { showFlash('CSVの書き出しは、管理者だけができます。必要なときは管理者に頼んでください。', 'err'); return; }
+        if (!store.canExport()) { showFlash('CSVを書き出す権限がありません。必要なときは、権限のある人に頼んでください。', 'err'); return; }
         const t = table();
         if (store.isPreview) {
           // プレビューの中ではファイルを保存できないので、表計算ソフトに貼り付けられる形でコピーする

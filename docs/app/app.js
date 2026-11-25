@@ -44,7 +44,7 @@ function header(active, bizTabs) {
 }
 
 function previewBar() {
-  if (!store.canEdit()) return `<div class="no-print" style="background:#eef4ff;border-bottom:1px solid #2f6fde;font-size:12px;padding:5px 24px"><b>閲覧専用</b>：このアカウントは、内容を見ることだけができます。登録・変更・メール送信・CSVの書き出しはできません。</div>`;
+  if (!store.canEdit()) return `<div class="no-print" style="background:#eef4ff;border-bottom:1px solid #2f6fde;font-size:12px;padding:5px 24px"><b>閲覧専用</b>：このアカウントは、内容を見ることだけができます。登録・変更などが必要なときは、権限を変えられる人に頼んでください。</div>`;
   if (!store.isPreview) return '';
   if (store.durable) {
     return `<div class="no-print" style="background:#e8f5ee;border-bottom:1px solid #1f8a5b;font-size:12px;padding:5px 24px">

@@ -2,32 +2,54 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ログインした担当者だけが読み書きできる（アカウントは管理者がFirebaseの画面で追加する。外部からの登録は止めてある）
+    // ログインした人は、すべて見られる。書き換えは、権限の名簿（meta/access）でチェックが入っている人だけ。
+    // 名簿の形：people.<メールアドレス> = { edit, send, del, settings, export, backup, roles }（それぞれ true / false）
     function signedIn() { return request.auth != null; }
-    // 管理者（CSVやバックアップを書き出せる人）の名簿：meta/admins の emails
-    function adminsPath() { return /databases/$(database)/documents/meta/admins; }
-    function isAdmin() { return signedIn() && exists(adminsPath()) && request.auth.token.email in get(adminsPath()).data.emails; }
+    function accessPath() { return /databases/$(database)/documents/meta/access; }
+    function mail() { return request.auth.token.email; }
+    function can(p) {
+      return signedIn() && exists(accessPath())
+        && mail() in get(accessPath()).data.people
+        && get(accessPath()).data.people[mail()][p] == true;
+    }
+    // 設定のうち、「設定の変更」の権限がないと変えられない項目（会社情報・口座・印影・メール文面・担当者など）
+    function protectedKeys() {
+      return ['company', 'representative', 'postal', 'address', 'tel', 'fax', 'email', 'reg_no', 'bank', 'seal_image',
+              'number_style', 'number_prefix', 'due_days', 'mail_subject', 'mail_body', 'mail_from', 'mail_from_name', 'mail_bcc_self', 'staff'];
+    }
 
-    // 閲覧だけの人（税理士など）の名簿：meta/viewers の emails。名簿にある人は、見るだけで書き換えられない
-    function viewersPath() { return /databases/$(database)/documents/meta/viewers; }
-    function isViewer() { return exists(viewersPath()) && request.auth.token.email in get(viewersPath()).data.emails; }
-    function canEdit() { return signedIn() && !isViewer(); }
+    // 権限の名簿：変えられるのは「権限の変更」にチェックがある人だけ。消すことはできない
+    match /meta/access {
+      allow read: if signedIn();
+      allow create, update: if can('roles');
+      allow delete: if false;
+    }
+    match /meta/{docId} {
+      allow read: if signedIn();
+      allow write: if docId != 'access' && can('edit');
+    }
 
-    match /{col}/{docId} {
+    // 請求書・取引先・商品・商品データ格納庫：登録と変更は「登録・変更」、削除は「削除」
+    match /invoices/{id} { allow read: if signedIn(); allow create, update: if can('edit'); allow delete: if can('del'); }
+    match /clients/{id}  { allow read: if signedIn(); allow create, update: if can('edit'); allow delete: if can('del'); }
+    match /products/{id} { allow read: if signedIn(); allow create, update: if can('edit'); allow delete: if can('del'); }
+    match /catalog/{id}  { allow read: if signedIn(); allow create, update: if can('edit'); allow delete: if can('del'); }
+
+    // 単価・月額固定・明細の控え：「登録・変更」（入れ替えのときに消すことがあるので、削除も含む）
+    match /clientPrices/{id} { allow read: if signedIn(); allow write: if can('edit'); }
+    match /recurring/{id}    { allow read: if signedIn(); allow write: if can('edit'); }
+    match /cbmPacks/{id}     { allow read: if signedIn(); allow write: if can('edit'); }
+
+    // 事業（振込先の口座を含む）：「設定の変更」
+    match /businesses/{id} { allow read: if signedIn(); allow write: if can('settings'); }
+
+    // 設定：対応表などは「登録・変更」で変えられる。会社情報・口座・文面などは「設定の変更」が必要
+    match /settings/{id} {
       allow read: if signedIn();
-      // 管理者の名簿だけは、下の専用の決まりでしか書けない
-      allow write: if canEdit() && !(col == 'meta' && (docId == 'admins' || docId == 'viewers'));
-    }
-    match /{col}/{docId}/{rest=**} {
-      allow read: if signedIn();
-      allow write: if canEdit();
-    }
-    // 名簿を書き換えられるのは管理者だけ（まだ名簿がないときだけ、最初の1人が作れる）
-    match /meta/admins {
-      allow write: if isAdmin() || (signedIn() && !exists(adminsPath()));
-    }
-    match /meta/viewers {
-      allow write: if isAdmin();
+      allow create: if can('settings');
+      allow update: if can('settings')
+        || (can('edit') && !request.resource.data.values.diff(resource.data.values).affectedKeys().hasAny(protectedKeys()));
+      allow delete: if false;
     }
   }
 }

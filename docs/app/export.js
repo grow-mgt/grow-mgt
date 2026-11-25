@@ -18,7 +18,7 @@ function toBase64(text) {
 }
 
 /** CSVで書き出す（プレビューの中ではファイルを保存できないので、貼り付けられる形でコピーする） */
-const NO_EXPORT = 'CSVの書き出しと送信は、管理者だけができます。必要なときは管理者に頼んでください。';
+const NO_EXPORT = 'CSVを書き出す権限がありません。必要なときは、権限のある人に頼んでください。';
 export async function exportCsv(table, filename) {
   if (!store.canExport()) { showFlash(NO_EXPORT, 'err'); return; }
   if (store.isPreview) {
