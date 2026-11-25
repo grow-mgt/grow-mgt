@@ -2,6 +2,7 @@
 import { store } from '../store.js';
 import { state, go, setBiz, setFilter } from '../nav.js';
 import * as cbm from '../cbm-logic.js';
+import { parseCbmPdfs } from '../cbm-pdf.js';
 import { h, yen, nf, today, endOfNextMonth, toIntOrNull } from '../util.js';
 import { flash, showFlash, confirmBox } from '../ui.js';
 
@@ -32,15 +33,25 @@ function loadPage() {
   const html = `
 <p class="crumb"><a href="#list">請求書</a> ›</p>
 <h1>シービーエムの明細から作る</h1>
-<p class="muted">シービーエムの請求書から作った管理表（卸先別_年間管理表）の明細を読み込んで、請求先ごとに請求書の下書きを作ります。単価は、それぞれの取引先の販売単価になります。</p>
+<p class="muted">シービーエムの請求書の明細を読み込んで、請求先ごとに請求書の下書きを作ります。単価は、それぞれの取引先の販売単価になります。</p>
 
-<form class="card form narrow-wide" id="pasteForm">
-  <h2>新しい月の明細を読み込む</h2>
+<form class="card form narrow-wide" id="pdfForm">
+  <h2>請求書のPDFから読み込む</h2>
+  <p class="small muted">シービーエムから届いた請求書のPDFを選んでください。2枚目・3枚目に分かれているときは、まとめて選びます（順番は自動でそろえます）。読み取った明細の合計が、請求書の小計と合うかを確かめてから取り込みます。</p>
+  <label>PDFファイル<input type="file" name="files" accept="application/pdf,.pdf" multiple required></label>
+  <p class="small" id="pdfMsg"></p>
+  <div class="actions"><button class="btn primary">PDFを読み込む</button></div>
+</form>
+
+<details class="card narrow-wide"><summary><b>貼り付けて読み込む</b> <span class="small muted">PDFに文字データがない月など</span></summary>
+<form class="form" id="pasteForm" style="margin-top:12px">
+  <h2 hidden>新しい月の明細を読み込む</h2>
   <p class="small muted">管理表の「◯月_明細」タブを開き、見出しの行（卸先名・取引日・摘要・数量・単価）から最後の行までを選んでコピーし、下に貼り付けてください。</p>
   <label>何月分の明細ですか<input type="month" name="month" value="${td.slice(0, 7)}" required style="width:auto"></label>
   <label>明細（貼り付け）<textarea name="text" rows="6" class="code" placeholder="卸先名	取引日	摘要	数量	単価 …" required></textarea></label>
   <div class="actions"><button class="btn primary">読み込む</button></div>
 </form>
+</details>
 
 ${tabs.length ? `
 <div class="card narrow-wide">
@@ -52,6 +63,34 @@ ${tabs.length ? `
   return {
     title: 'シービーエムの明細から作る', active: 'list', html,
     mount(root) {
+      root.querySelector('#pdfForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target, msg = root.querySelector('#pdfMsg'), btn = f.querySelector('button');
+        const picked = [...f.files.files];
+        if (!picked.length) return;
+        btn.disabled = true; msg.textContent = 'PDFを読んでいます…';
+        let res;
+        try { res = await parseCbmPdfs(await Promise.all(picked.map(async (x) => ({ name: x.name, buf: await x.arrayBuffer() })))); }
+        catch (err) { btn.disabled = false; msg.textContent = ''; showFlash(err.message, 'err'); return; }
+        btn.disabled = false; msg.textContent = '';
+        if (!res.month) { showFlash('請求日を読み取れませんでした。請求書の1枚目（請求日が書いてあるページ）も一緒に選んでください。', 'err'); return; }
+        const tab = `${Number(res.month.slice(0, 4))}年${Number(res.month.slice(5))}月_明細`;
+        // 検算：明細の合計と、請求書の小計
+        const problems = res.warnings.slice(0, 5);
+        if (res.subtotal == null) problems.unshift('請求書の「小計」が見つかりませんでした（最後のページが入っていないかもしれません）。');
+        else if (res.subtotal !== res.sum) problems.unshift(`読み取った明細の合計（${nf(res.sum)}円）が、請求書の小計（${nf(res.subtotal)}円）と合いません。ページが足りないか、読み取れない行があります。`);
+        if (problems.length && !(await confirmBox('確認が必要な点があります。\n\n・' + problems.join('\n・') + '\n\nこのまま取り込みますか？', 'このまま取り込む'))) return;
+        if (cbm.storedTabs().includes(tab) && !(await confirmBox(`「${tab}」の控えがすでにあります（${cbm.storedLines(tab).length}行）。PDFの内容（${res.lines.length}行）で入れ替えますか？`, '入れ替える'))) return;
+        const added = await cbm.prepareProducts(res.lines);
+        await store.saveCbmLines(tab, res.lines);
+        await cbm.saveGeneralRemarks(tab, res.general);
+        const flagged = await cbm.flagExisting(tab); // 作成済みの請求書にも、備考の「要確認」を付ける
+        Object.assign(work, { tab, lines: cbm.storedLines(tab), over: {} });
+        flash(`「${tab}」をPDFから読み込みました（${res.lines.length}行・税抜 ${nf(res.sum)}円${res.subtotal === res.sum ? '・請求書の小計と一致' : ''}）。`
+          + (res.notes.length || res.general.length ? ' 請求書に備考があります。下の黄色の枠を確認してください。' : '')
+          + (flagged ? ` 作成済みの請求書${flagged}件に「備考あり・要確認」の印を付けました。` : '') + (added ? ` 明細にしかない商品を${added}件、商品に足しました。` : ''), problems.length || res.notes.length || res.general.length ? 'warn' : 'ok');
+        go('cbm');
+      });
       root.querySelector('#pasteForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = e.target, m = /^(\d{4})-(\d{2})$/.exec(f.month.value);
@@ -62,6 +101,7 @@ ${tabs.length ? `
         if (cbm.storedTabs().includes(tab) && !(await confirmBox(`「${tab}」の控えがすでにあります。貼り付けた内容で入れ替えますか？`, '入れ替える'))) return;
         const added = await cbm.prepareProducts(lines);
         await store.saveCbmLines(tab, lines); // 後から作り直せるように控えを残す
+        await cbm.saveGeneralRemarks(tab, []);
         Object.assign(work, { tab, lines, over: {} });
         flash(`「${tab}」を読み込みました（${lines.length}行）。` + (added ? `明細にしかない商品を${added}件、商品に足しました。` : '')); go('cbm');
       });
@@ -109,6 +149,20 @@ function planPage() {
   <p class="muted">「${h(tab)}」${lines.length}行 → 請求書 ${pl.invoices.size}件${placed < lines.length ? `（請求先が決まっていない行が${lines.length - placed}行あります）` : ''}</p>
   <div class="btns"><button class="btn small" id="resetCbm">別の明細を読み込む</button><button class="btn small" id="rebuildCbm">未完成を作り直す</button></div>
 </div>
+
+${(() => {
+  const gen = cbm.generalRemarks(tab);
+  const noted = [...pl.invoices.values()].filter((inv) => inv.lines.some((l) => l.note));
+  if (!gen.length && !noted.length) return '';
+  return `<section class="card remark-box">
+    <h2 style="margin-top:0">請求書のPDFに備考があります <span class="badge warn">目で確認してください</span></h2>
+    <p class="small">備考の内容が請求書に正しく反映されているか、下書きを作ったあとに1件ずつ確かめてください。該当の請求書には「備考あり・要確認」の印が付き、確認するまでメールの一括送信の対象から外れます。</p>
+    <ul class="small">
+      ${noted.flatMap((inv) => inv.lines.filter((l) => l.note).map((l) => `<li><b>${h(inv.client_name)}</b>：${h(l.product_name || l.raw)} ― ${h(l.note)}${l.from === 'PDFの備考（お客様価格）' ? `（単価を ${nf(l.price)}円 にしました）` : '（単価は自動では変えていません）'}</li>`)).join('')}
+      ${gen.map((t) => `<li><b>どの明細のことか分からない備考</b>：${h(t)}（この月の請求書すべてに、確認の印を付けます）</li>`).join('')}
+    </ul>
+  </section>`;
+})()}
 
 <form id="mapForm">
   <details class="card"${needStore ? ' open' : ''}>
@@ -180,7 +234,7 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
           <tr class="${l.price == null ? 'missing' : ''}">
             ${inv.show_ship ? `<td>${h(l.store)}</td>` : ''}
             <td>${h(l.date)}</td>
-            <td>${h(l.product_name || l.raw)}${l.product_name && l.product_name !== l.raw ? `<br><span class="muted">管理表：${h(l.raw)}</span>` : ''}</td>
+            <td>${h(l.product_name || l.raw)}${l.product_name && l.product_name !== l.raw ? `<br><span class="muted">管理表：${h(l.raw)}</span>` : ''}${l.note ? `<br><span class="badge warn">備考</span> <span class="small">${h(l.note)}</span>` : ''}</td>
             <td class="r">${h(qtyText(l.qty))}</td>
             <td class="r muted">${l.cbm_cost != null ? nf(l.cbm_cost) : ''}</td>
             <td class="r"><input data-key="${l.key}" value="${h(l.price ?? '')}" class="r${l.price == null ? ' warn-input' : ''}" inputmode="numeric" placeholder="未設定"><span class="hint${l.from === '手入力' ? ' manual' : (l.from && l.from !== '標準単価' ? ' mine' : '')}">${h(l.from)}</span></td>

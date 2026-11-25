@@ -3,7 +3,7 @@
 //  2) 選んだ請求書をまとめてメールで送る（今までの bulk_send.php）
 import { store } from '../store.js';
 import { state, go } from '../nav.js';
-import { calcInvoice, nextNumber, fillTemplate } from '../logic.js';
+import { needsCheck, calcInvoice, nextNumber, fillTemplate } from '../logic.js';
 import { sendMail } from '../mailer.js';
 import { staffList } from './settings.js';
 import { h, yen, today, nowUtc, slashDate, randomToken } from '../util.js';
@@ -89,8 +89,8 @@ export function bulkMailPage(ids) {
   if (!list.length) return null;
   const staff = staffList();
   let last = ''; try { last = localStorage.getItem('grow-mgt-sender') || ''; } catch (e) { last = ''; }
-  const note = (inv) => (inv.incomplete === 1 ? '<span class="badge b-partial">未完成のため送りません</span>' : (String(inv.client_email || '').trim() === '' ? '<span class="badge b-partial">メールアドレスがないため送りません</span>' : ''));
-  const sendable = list.filter((inv) => inv.incomplete !== 1 && String(inv.client_email || '').trim() !== '').length;
+  const note = (inv) => (inv.incomplete === 1 ? '<span class="badge b-partial">未完成のため送りません</span>' : needsCheck(inv) ? '<span class="badge warn">備考の確認がまだのため送りません</span>' : (String(inv.client_email || '').trim() === '' ? '<span class="badge b-partial">メールアドレスがないため送りません</span>' : ''));
+  const sendable = list.filter((inv) => inv.incomplete !== 1 && !needsCheck(inv) && String(inv.client_email || '').trim() !== '').length;
 
   const html = `
 <p class="crumb"><a href="#list">請求書の一覧</a> ›</p>
@@ -129,6 +129,7 @@ ${staff.length ? `<label style="max-width:420px;margin-bottom:12px">差し出し
         for (const inv of list) {
           const to = String(inv.client_email || '').trim(), cc = String(inv.client_cc || '').trim();
           if (inv.incomplete === 1) { skip.push(inv.number + '（未完成）'); continue; }
+          if (needsCheck(inv)) { skip.push(inv.number + '（備考の確認がまだ）'); continue; }
           if (to === '') { skip.push(inv.number + '（メールアドレスなし）'); continue; }
           try {
             const r = await sendMail({ from, to, cc, subject: fillTemplate(store.setting('mail_subject'), inv), body: fillTemplate(store.setting('mail_body'), inv), invoice: inv });

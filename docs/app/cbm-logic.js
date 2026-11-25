@@ -142,7 +142,8 @@ const tabKey = (t) => { const m = /(\d{4})年(\d{1,2})月/u.exec(t); return m ? 
 export const storedTabs = () => [...new Set(store.db.cbmLines.map((l) => l.tab))].sort((a, b) => tabKey(a) - tabKey(b));
 export function storedLines(tab) {
   return store.db.cbmLines.filter((l) => l.tab === tab).sort((a, b) => (a.sort - b.sort) || (a.id - b.id))
-    .map((r) => ({ store: r.store, date: r.date || '', name: r.name, qty: Number(r.qty), cost: r.cost == null ? null : Number(r.cost) }));
+    .map((r) => ({ store: r.store, date: r.date || '', name: r.name, qty: Number(r.qty), cost: r.cost == null ? null : Number(r.cost),
+      ...(r.note ? { note: r.note } : {}), ...(r.cust_price != null ? { cust_price: Number(r.cust_price) } : {}) }));
 }
 
 /** 品名の対応表にない商品を足す（原価はシービーエムの単価）。足した数を返す */
@@ -198,13 +199,15 @@ export function plan(lines, overrides = {}) {
     let info;
     if (client.price_rule === 'cost_all' && l.cost != null) info = { price: Number(l.cost), from: '原価（明細の単価）' };
     else info = pid ? priceInfo(cid, pid) : { price: null, from: '' };
+    // 請求書PDFの備考に「お客様価格は￥…」とある行は、その価格を使う
+    if (l.cust_price != null) info = { price: Number(l.cust_price), from: 'PDFの備考（お客様価格）' };
     const key = 'r' + i;
     const over = Object.prototype.hasOwnProperty.call(overrides, key);
     if (!out.invoices.has(cid)) out.invoices.set(cid, { client_id: cid, client_name: client.name, lines: [], stores: new Set() });
     const inv = out.invoices.get(cid);
     inv.stores.add(l.store);
     inv.lines.push({ key, store: l.store, date: l.date, raw: l.name, qty: l.qty, cbm_cost: l.cost, product_id: pid, product_name: pid ? store.product(pid).name : '',
-      price: over ? overrides[key] : info.price, from: over ? '手入力' : info.from });
+      price: over ? overrides[key] : info.price, from: over ? '手入力' : info.from, note: l.note || '' });
   });
   for (const inv of out.invoices.values()) {
     inv.show_ship = inv.stores.size > 1; // 納品先が2店以上あるときだけ、納品先を明細に出す
@@ -219,6 +222,18 @@ export function plan(lines, overrides = {}) {
 }
 
 export const refOf = (tab, cid) => 'cbm:' + tab + ':' + cid;
+// その月の「全体の備考」（どの明細のことか分からない備考）
+export const generalRemarks = (tab) => { const v = json('cbm_remarks')[tab]; return Array.isArray(v) ? v : []; };
+export async function saveGeneralRemarks(tab, list) {
+  const all = json('cbm_remarks');
+  if (list && list.length) all[tab] = list; else delete all[tab];
+  await store.saveSetting('cbm_remarks', JSON.stringify(all));
+}
+// この請求書で、担当者に目で確かめてもらう備考（なければ空）
+export function checkNoteOf(tab, inv) {
+  const mine = [...new Set(inv.lines.filter((l) => l.note).map((l) => `${l.product_name || l.raw}：${l.note}`))];
+  return mine.concat(generalRemarks(tab).map((t) => `（請求書全体の備考）${t}`)).join('\n');
+}
 
 /** 下書きを作る。戻り値：作った請求書のidの配列 */
 export async function create(tab, pl, opt) {
@@ -243,22 +258,38 @@ export async function create(tab, pl, opt) {
       }
     }
     const calc = calcInvoice(items, false);
-    const incomplete = inv.missing > 0 ? 1 : 0; // 価格が未設定の行があれば、未完成の下書きにする（価格は0のまま入る）
+    const incomplete = inv.missing > 0 ? 1 : 0;
+    const checkNote = checkNoteOf(tab, inv); // PDFの備考があれば、送る前に目で確かめてもらう // 価格が未設定の行があれば、未完成の下書きにする（価格は0のまま入る）
     const base = store.newId();
     const withIds = items.map((it, i) => ({ id: base + i, ...it, amount: Math.round(it.qty * it.price) }));
     let target;
     if (existing) {
-      target = Object.assign(existing, { client_id: cid, subtotal: calc.subtotal, tax: calc.tax, total: calc.total, incomplete, items: withIds });
+      target = Object.assign(existing, { client_id: cid, subtotal: calc.subtotal, tax: calc.tax, total: calc.total, incomplete, items: withIds, check_note: checkNote, checked_at: null, checked_by: '' });
     } else {
       target = { id: base + 900, number: nextNumber(opt.issue), client_id: cid, title: opt.title, issue_date: opt.issue, due_date: opt.due, notes: opt.notes, withholding: 0,
         subtotal: calc.subtotal, tax: calc.tax, withholding_amount: 0, total: calc.total, token: randomToken(), status: 'draft', sent_at: null, opened_at: null, open_count: 0,
-        paid_at: null, paid_amount: 0, created_at: nowUtc(), source_ref: ref, business_id: 1, tax_mode: 'exclude', incomplete, items: withIds, payments: [], events: [] };
+        paid_at: null, paid_amount: 0, created_at: nowUtc(), source_ref: ref, business_id: 1, tax_mode: 'exclude', incomplete, items: withIds, payments: [], events: [], check_note: checkNote, checked_at: null, checked_by: '' };
     }
-    store.logEvent(target, existing ? 'edit' : 'create', (existing ? '「' + tab + '」から作り直し' : '「' + tab + '」から下書きを作成') + (incomplete ? '（価格未設定あり・未完成）' : ''));
+    store.logEvent(target, existing ? 'edit' : 'create', (existing ? '「' + tab + '」から作り直し' : '「' + tab + '」から下書きを作成') + (incomplete ? '（価格未設定あり・未完成）' : '') + (checkNote ? '（PDFの備考あり・要確認）' : ''));
     await store.saveInvoice(target);
     created.push(target.id);
   }
   return created;
+}
+
+/** すでに作ってある請求書にも、PDFの備考の「要確認」を付ける（備考が新しく分かったとき）。付けた件数を返す */
+export async function flagExisting(tab) {
+  const pl = plan(storedLines(tab), {});
+  let n = 0;
+  for (const [cid, inv] of pl.invoices) {
+    const v = store.db.invoices.find((x) => x.source_ref === refOf(tab, cid));
+    const note = checkNoteOf(tab, inv);
+    if (!v || note === '' || v.check_note === note) continue;
+    Object.assign(v, { check_note: note, checked_at: null, checked_by: '' });
+    store.logEvent(v, 'edit', 'PDFの備考あり・要確認');
+    await store.saveInvoice(v); n++;
+  }
+  return n;
 }
 
 export function monthLabel(tab) {

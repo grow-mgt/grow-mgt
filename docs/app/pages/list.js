@@ -1,7 +1,7 @@
 // 請求書の一覧（今までの index.php と同じ画面）
 import { store } from '../store.js';
 import { state, go, setFilter } from '../nav.js';
-import { isReconcile, statusOf, statusBadge, setInvoiceStatus, STATUS_LABELS } from '../logic.js';
+import { needsCheck, isReconcile, statusOf, statusBadge, setInvoiceStatus, STATUS_LABELS } from '../logic.js';
 import { h, yen, today, slashDate, isYmd } from '../util.js';
 import { flash, showFlash, confirmBox, askDate } from '../ui.js';
 
@@ -124,7 +124,7 @@ export function listPage() {
       ${rows.map((r) => `
         <tr class="${r.incomplete === 1 ? 'row-incomplete' : ''}" data-id="${r.id}">
           <td class="ck"><input type="checkbox" name="ids" value="${r.id}"></td>
-          <td><span class="st-pick" data-id="${r.id}" data-st="${h(r.status)}" title="クリックしてステータスを変える">${statusBadge(r)}</span>${r.incomplete === 1 ? '<br><span class="badge b-partial">未完成：価格未設定</span>' : ''}</td>
+          <td><span class="st-pick" data-id="${r.id}" data-st="${h(r.status)}" title="クリックしてステータスを変える">${statusBadge(r)}</span>${r.incomplete === 1 ? '<br><span class="badge b-partial">未完成：価格未設定</span>' : ''}${needsCheck(r) ? '<br><span class="badge warn">備考あり・要確認</span>' : ''}</td>
           ${!bid ? `<td class="small muted">${h(store.bizOf(r.business_id).name)}</td>` : ''}
           <td>${h(clientName(r))}</td>
           <td class="muted ttl" title="${h(r.title)}">${h(r.title)}</td>

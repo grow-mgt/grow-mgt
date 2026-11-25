@@ -171,3 +171,6 @@ export function bizShares(inv) {
   for (const x of shares) x.ratio = total ? x.total / total : 0;
   return shares;
 }
+
+// PDFの備考があって、まだ担当者が確かめていない請求書か
+export const needsCheck = (inv) => String(inv.check_note || '').trim() !== '' && !inv.checked_at;

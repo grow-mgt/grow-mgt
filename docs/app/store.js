@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   // シービーエムの請求書の品名 → 価格表の商品名（最初の値）
   cbm_product_alias: "{\"リフィルリボン(黒)詰替用YRR-5840-BL\": \"リフィルリボン黒 YRR-5840-BL\", \"ハーフリフィルリボン(黒)詰替用YRR-3040-BL\": \"ハーフリフィルリボン黒 YRR-3040-BL\", \"感熱紙(カンサナロー、DTAヨウ)\": \"感熱紙(監査ナロー、DTA用)\", \"GC31KHブラック\": \"トナー GC31 ブラック\", \"GC31YHイエロー\": \"トナー GC31 ブラック以外\", \"GC31CHシアン\": \"トナー GC31 ブラック以外\", \"GC31MHマゼンタ\": \"トナー GC31 ブラック以外\", \"GC42KHブラック\": \"トナー GC42 ブラック\", \"ペン本体(黒)KY-012362-3\": \"マーキングペン(黒)KY-012362-3\", \"替芯(18本)+補充インキ(黒18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(赤18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(青18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(緑18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\", \"替芯(18本)+補充インキ(黄土色18本)KR-ND\": \"替芯(18本)+補充インキ(18本)\"}",
   cbm_store_map: '{}',
+  cbm_remarks: '{}', // 請求書PDFの備考のうち、明細に結び付かないもの（月ごと）
   staff: '[]', // 担当者（メールの差し出し人）
   // 卸先別の年間管理表：行（卸先・グループ）の並び、明細の卸先名→行の対応、明細のない月に手で入れた金額
   kanri_rows: '[]', kanri_alias: '{}', kanri_manual: '{}',
@@ -175,7 +176,8 @@ export const store = {
   async saveCbmLines(tab, lines) {
     const base = this.newId();
     this.db.cbmLines = this.db.cbmLines.filter((l) => l.tab !== tab)
-      .concat(lines.map((l, i) => ({ id: base + i, tab, sort: i, store: l.store, date: l.date || '', name: l.name, qty: l.qty, cost: l.cost ?? null })));
+      .concat(lines.map((l, i) => ({ id: base + i, tab, sort: i, store: l.store, date: l.date || '', name: l.name, qty: l.qty, cost: l.cost ?? null,
+        ...(l.note ? { note: l.note } : {}), ...(l.cust_price != null ? { cust_price: l.cust_price } : {}) }))); // note・cust_price：PDFの備考（お客様価格など）
     await this.backend.put(this.db, 'cbmLines', null, null);
   },
   // 設定をまとめて保存する（変わっていなければ何も書かない）

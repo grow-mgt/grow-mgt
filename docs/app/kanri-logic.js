@@ -205,7 +205,7 @@ export async function syncLinesFromInvoice(oldItems, inv) {
     res.added++;
   }
   if (res.changed || res.removed || res.added) {
-    await store.saveCbmLines(tab, lines.filter((l) => !l._gone).map((l) => ({ store: l.store, date: l.date, name: l.name, qty: l.qty, cost: l.cost })));
+    await store.saveCbmLines(tab, lines.filter((l) => !l._gone).map((l) => ({ store: l.store, date: l.date, name: l.name, qty: l.qty, cost: l.cost, note: l.note, cust_price: l.cust_price })));
   }
   return res;
 }

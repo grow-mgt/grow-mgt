@@ -481,3 +481,8 @@ th.sortable[data-dir="desc"]::after { content: " ▼"; font-size: 10px; }
 .view-sheet { max-width: 794px; margin: 0 auto; overflow: hidden; }
 .view-sheet .doc { box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 @media print { .view-sheet { max-width: none; overflow: visible; } }
+
+/* PDFの備考：目で確認してもらう枠 */
+.remark-box { background: #fff8e6; border: 1px solid #eda100; }
+.remark-box .remark-text { background: #fff; border-left: 4px solid #eda100; padding: 10px 14px; margin: 8px 0 4px; font-weight: 600; }
+.remark-done { margin: 0 0 12px; }

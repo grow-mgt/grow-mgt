@@ -1,7 +1,7 @@
 // 請求書の詳細（今までの invoice.php と同じ画面）
 import { store } from '../store.js';
 import { go, setBiz } from '../nav.js';
-import { isReconcile, statusBadge, setInvoiceStatus, refreshPaymentStatus, fillTemplate, publicUrl, STATUS_LABELS } from '../logic.js';
+import { needsCheck, isReconcile, statusBadge, setInvoiceStatus, refreshPaymentStatus, fillTemplate, publicUrl, STATUS_LABELS } from '../logic.js';
 import { renderInvoiceDoc, fitDocs } from '../doc.js';
 import { sendMail } from '../mailer.js';
 import { staffList } from './settings.js';
@@ -34,6 +34,14 @@ export function detailPage(id) {
     <a class="btn" href="#copy-${id}">複製して新規</a>
   </div>
 </div>
+
+${String(inv.check_note || '').trim() !== '' ? (needsCheck(inv) ? `
+<section class="card remark-box">
+  <h2 style="margin-top:0">PDFの備考あり・要確認 <span class="badge warn">送る前に目で確認してください</span></h2>
+  <p class="small">シービーエムの請求書の備考に、次の記載がありました。この請求書の品目・単価・金額が、備考のとおりになっているか確かめてください。</p>
+  <p class="remark-text">${nl2br(inv.check_note)}</p>
+  <div class="btn-row"><button type="button" class="btn primary" id="checkDone">確認しました（内容は正しい）</button><a class="btn" href="#edit-${id}">編集して直す</a></div>
+</section>` : `<p class="small muted remark-done">PDFの備考は確認済みです（${h(jdatetime(inv.checked_at))}${inv.checked_by ? '・' + h(inv.checked_by) : ''}）：${h(String(inv.check_note).replace(/\n/g, '／'))}</p>`) : ''}
 
 ${irec ? '' : `
 <ol class="steps">
@@ -141,6 +149,7 @@ ${irec ? '' : `
       on('#sendForm', 'submit', async (e) => {
         e.preventDefault();
         const f = e.target, to = f.to.value.trim(), cc = f.cc.value.trim();
+        if (needsCheck(raw)) { showFlash('この請求書は、PDFの備考の確認がまだです。上の黄色の枠で内容を確かめ、「確認しました」を押してから送ってください。', 'err'); return; }
         const from = f.from ? f.from.value : '';
         if (from === '') { showFlash('差し出し人にする担当者を、設定の「メール送信」で登録してください。', 'err'); return; }
         try { localStorage.setItem('grow-mgt-sender', from); } catch (err) { /* 覚えられなくても送れる */ }
@@ -153,6 +162,12 @@ ${irec ? '' : `
           store.logEvent(raw, 'send', (r.simulated ? '（プレビュー：実際には送っていません）' : '') + 'メール送信：' + to + (cc ? '（CC ' + cc + '）' : '') + '／差し出し人 ' + from);
           await save(r.simulated ? 'プレビューのため、メールは実際には送っていません。送ったときと同じく「送付済み」にしました。' : '請求書をメールで送りました。', r.simulated ? 'warn' : 'ok');
         } catch (err) { showFlash(err.message, 'err'); }
+      });
+      on('#checkDone', 'click', async () => {
+        raw.checked_at = nowUtc();
+        raw.checked_by = store.backend.userEmail ? store.backend.userEmail() : '';
+        store.logEvent(raw, 'edit', 'PDFの備考を確認した');
+        await save('備考の確認を記録しました。');
       });
       on('#markSent', 'click', async () => {
         raw.sent_at = raw.sent_at || nowUtc();
