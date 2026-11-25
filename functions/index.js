@@ -1,6 +1,7 @@
 // メール送信（Cloud Functions）。
 // 送信サービス Brevo の鍵は Firebase のシークレット（BREVO_API_KEY）に入れる。コードには書かない。
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -162,5 +163,61 @@ exports.viewInvoice = onRequest(
       settings: pick(values, ["company", "representative", "reg_no", "postal", "address", "tel", "fax", "email", "seal_image", "bank"]),
       business: { id: inv.business_id || 1, bank: b.bank || "" },
     });
+  }
+);
+
+/* ---------- バックアップ ----------
+   毎日3時（日本時間）に、全部のデータを1つのファイル（JSON）にして、バックアップ用の置き場所（Cloud Storage）に保存する。
+   ファイルの形は、アプリの「最初のデータを取り込む」と同じ。90日たったファイルは自動で消える（置き場所の設定）。 */
+const BACKUP_BUCKET = "grow-mgt-backups-922316623607";
+const BACKUP_COLS = ["businesses", "clients", "products", "clientPrices", "recurring", "invoices", "catalog"];
+const BACKUP_NAME = /^backup_\d{4}-\d{2}-\d{2}_\d{4}\.json$/;
+
+async function makeBackup(by) {
+  const db = admin.firestore();
+  const out = { version: "backup-1", exported_at: new Date().toISOString(), by };
+  const snaps = await Promise.all(BACKUP_COLS.map((c) => db.collection(c).get()));
+  BACKUP_COLS.forEach((c, i) => { out[c] = snaps[i].docs.map((d) => d.data()); });
+  const st = await db.doc("settings/main").get();
+  out.settings = st.exists ? st.data().values || {} : {};
+  const packs = await db.collection("cbmPacks").get();
+  out.cbmLines = packs.docs.map((d) => d.data()).sort((a, b) => a.n - b.n).flatMap((p) => p.lines || []);
+  const jst = new Date(Date.now() + 9 * 3600 * 1000).toISOString();
+  const name = `backup_${jst.slice(0, 10)}_${jst.slice(11, 13)}${jst.slice(14, 16)}.json`;
+  const text = JSON.stringify(out);
+  await admin.storage().bucket(BACKUP_BUCKET).file(name).save(text, { contentType: "application/json", resumable: false });
+  const counts = Object.fromEntries(BACKUP_COLS.map((c) => [c, out[c].length]).concat([["cbmLines", out.cbmLines.length]]));
+  const at = jst.slice(0, 16).replace("T", " ");
+  await db.doc("meta/backup").set({ last_at: at, last_file: name, size: text.length, counts, by });
+  return { name, at, size: text.length, counts };
+}
+
+exports.dailyBackup = onSchedule(
+  { schedule: "every day 03:00", timeZone: "Asia/Tokyo", region: "asia-northeast1", timeoutSeconds: 300, retryCount: 2 },
+  async () => { await makeBackup("自動（毎日3時）"); }
+);
+
+// アプリの設定画面から：今すぐバックアップ（run）／一覧（list）／1つを取り出す（get）
+exports.backups = onCall(
+  { region: "asia-northeast1", maxInstances: 2, timeoutSeconds: 120 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "ログインが必要です。");
+    const { action, name } = request.data || {};
+    const bucket = admin.storage().bucket(BACKUP_BUCKET);
+    if (action === "run") return makeBackup(request.auth.token.email || "アプリから");
+    if (action === "list") {
+      const [files] = await bucket.getFiles({ prefix: "backup_" });
+      return {
+        files: files.filter((f) => BACKUP_NAME.test(f.name))
+          .map((f) => ({ name: f.name, size: Number(f.metadata.size || 0) }))
+          .sort((a, b) => b.name.localeCompare(a.name)).slice(0, 100),
+      };
+    }
+    if (action === "get") {
+      if (typeof name !== "string" || !BACKUP_NAME.test(name)) throw new HttpsError("invalid-argument", "ファイル名が正しくありません。");
+      const [buf] = await bucket.file(name).download();
+      return { name, text: buf.toString("utf8") };
+    }
+    throw new HttpsError("invalid-argument", "操作が正しくありません。");
   }
 );

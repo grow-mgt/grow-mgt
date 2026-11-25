@@ -108,16 +108,15 @@ ${store.backend.kind !== 'firestore' ? `
   <textarea id="exportText" class="code" rows="4" readonly hidden></textarea>
 </section>` : ''}
 
-<section class="card">
-  <h2>これからつなぐもの</h2>
-  <p class="small muted">次の設定は、Firebaseにつないだあとにここへ入ります。今までのアプリにあった機能は、形を変えて引き継ぎます。</p>
-  <ul class="small">
-    <li><b>顧客情報スプレッドシートの読み込み</b>（契約先・価格表）：今は、読み込み済みの内容で動いています。</li>
-    <li><b>スプレッドシートへのバックアップ</b>：今は、このプレビューの保存先にデータを置いています。</li>
-    <li><b>メールの送信テスト</b>：送信サービスにつないだあとに使えます。</li>
-    <li><b>ログイン</b>：パスワードの代わりに、担当者ごとのログインになります。</li>
-  </ul>
-</section>`;
+<section class="card" id="backup">
+  <h2>バックアップ</h2>
+  ${store.backend.kind === 'firestore' ? `
+  <p class="small muted">毎日3時（日本時間）に、すべてのデータ（取引先・商品・単価・請求書・明細・設定など）を1つのファイルにして、Googleのクラウドの別の場所に保存しています。保存したファイルは90日間残り、そのあと古いものから自動で消えます。</p>
+  <p id="bkLast" class="small">最後のバックアップ：確認しています…</p>
+  <div class="btn-row"><button type="button" class="btn" id="bkRun">今すぐバックアップする</button><button type="button" class="btn" id="bkList">保存したファイルを見る</button><span class="small muted" id="bkMsg"></span></div>
+  <div id="bkFiles"></div>` : `<p class="small muted">本番では、毎日3時に自動でバックアップを取ります。このプレビューでは使えません。</p>`}
+</section>
+`;
 
   return {
     title: '設定', active: 'settings', bizTabs: false, html,
@@ -129,6 +128,47 @@ ${store.backend.kind !== 'firestore' ? `
         try { await navigator.clipboard.writeText(text); msg.textContent = 'コピーしました（' + count + '）。'; }
         catch (err) { const ta = root.querySelector('#exportText'); ta.hidden = false; ta.value = text; ta.select(); msg.textContent = '自動でコピーできませんでした。下の枠の中をすべて選んでコピーしてください（' + count + '）。'; }
       });
+      // バックアップ（本番だけ）
+      if (store.backend.kind === 'firestore') {
+        const be = store.backend, msg = root.querySelector('#bkMsg'), last = root.querySelector('#bkLast'), list = root.querySelector('#bkFiles');
+        const kb = (n) => (n / 1024).toFixed(n < 10240 ? 1 : 0) + 'KB';
+        const fileLabel = (n) => { const m = /^backup_(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})\.json$/.exec(n); return m ? `${m[1]}年${Number(m[2])}月${Number(m[3])}日 ${m[4]}:${m[5]}` : n; };
+        const showLast = async () => {
+          try {
+            const b = await be.backupInfo();
+            last.textContent = b ? `最後のバックアップ：${b.last_at}（${b.by}・請求書${(b.counts || {}).invoices ?? '-'}件・取引先${(b.counts || {}).clients ?? '-'}件・${kb(b.size || 0)}）` : '最後のバックアップ：まだありません（今夜3時に1回目を取ります）';
+          } catch (e) { last.textContent = '最後のバックアップ：確認できませんでした'; }
+        };
+        showLast();
+        const busy = (on, text) => { root.querySelectorAll('#bkRun, #bkList').forEach((b) => { b.disabled = on; }); msg.textContent = text || ''; };
+        root.querySelector('#bkRun').addEventListener('click', async () => {
+          busy(true, 'バックアップしています…');
+          try { const r = await be.backups('run'); busy(false); showFlash(`バックアップしました（${fileLabel(r.name)}・${kb(r.size)}）。`); showLast(); if (list.innerHTML) root.querySelector('#bkList').click(); }
+          catch (e) { busy(false); showFlash(e.message, 'err'); }
+        });
+        root.querySelector('#bkList').addEventListener('click', async () => {
+          busy(true, '読み込んでいます…');
+          try {
+            const r = await be.backups('list'); busy(false);
+            list.innerHTML = !r.files.length ? '<p class="small muted mt">保存したファイルはまだありません。</p>' : `
+              <table class="list small mt"><thead><tr><th>日時</th><th class="r">大きさ</th><th></th></tr></thead><tbody>
+              ${r.files.map((f) => `<tr><td>${h(fileLabel(f.name))}</td><td class="r">${kb(f.size)}</td><td class="r"><button type="button" class="btn small" data-bk="${h(f.name)}">ダウンロード</button></td></tr>`).join('')}
+              </tbody></table>`;
+          } catch (e) { busy(false); showFlash(e.message, 'err'); }
+        });
+        list.addEventListener('click', async (e) => {
+          const b = e.target.closest('[data-bk]'); if (!b) return;
+          b.disabled = true; b.textContent = '取り出し中…';
+          try {
+            const r = await be.backups('get', b.dataset.bk);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([r.text], { type: 'application/json' })); a.download = r.name; a.click();
+            URL.revokeObjectURL(a.href);
+            b.textContent = 'ダウンロードしました';
+          } catch (err) { b.disabled = false; b.textContent = 'ダウンロード'; showFlash(err.message, 'err'); }
+        });
+      }
+
       // 事業
       root.querySelectorAll('[data-biz-form]').forEach((f) => f.addEventListener('submit', async (e) => {
         e.preventDefault();

@@ -24,6 +24,18 @@ export class FirestoreBackend {
     this.packCount = 0;
   }
 
+  /* ---- バックアップ ---- */
+  // 最後のバックアップ（毎日3時の自動、または手動）
+  async backupInfo() { const d = await getDoc(doc(this.fs, 'meta', 'backup')); return d.exists() ? d.data() : null; }
+  // action：run（今すぐ）／list（一覧）／get（1つ取り出す）
+  async backups(action, name) {
+    try { return (await httpsCallable(this.fn, 'backups', { timeout: 120000 })({ action, name })).data; }
+    catch (e) {
+      if (e && e.code === 'functions/not-found') throw new Error('バックアップの仕組みが、まだFirebaseに入っていません。');
+      throw new Error(e && e.message ? e.message : 'バックアップを扱えませんでした。');
+    }
+  }
+
   /* ---- メール ---- */
   // 送るのは Cloud Functions の sendMail（差し出し人は、設定に登録した担当者だけ）
   async sendMail({ from, to, cc, subject, body, attachments, invoiceUrl }) {
