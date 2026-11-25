@@ -8,17 +8,26 @@ service cloud.firestore {
     function adminsPath() { return /databases/$(database)/documents/meta/admins; }
     function isAdmin() { return signedIn() && exists(adminsPath()) && request.auth.token.email in get(adminsPath()).data.emails; }
 
+    // 閲覧だけの人（税理士など）の名簿：meta/viewers の emails。名簿にある人は、見るだけで書き換えられない
+    function viewersPath() { return /databases/$(database)/documents/meta/viewers; }
+    function isViewer() { return exists(viewersPath()) && request.auth.token.email in get(viewersPath()).data.emails; }
+    function canEdit() { return signedIn() && !isViewer(); }
+
     match /{col}/{docId} {
       allow read: if signedIn();
       // 管理者の名簿だけは、下の専用の決まりでしか書けない
-      allow write: if signedIn() && !(col == 'meta' && docId == 'admins');
+      allow write: if canEdit() && !(col == 'meta' && (docId == 'admins' || docId == 'viewers'));
     }
     match /{col}/{docId}/{rest=**} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canEdit();
     }
     // 名簿を書き換えられるのは管理者だけ（まだ名簿がないときだけ、最初の1人が作れる）
     match /meta/admins {
       allow write: if isAdmin() || (signedIn() && !exists(adminsPath()));
+    }
+    match /meta/viewers {
+      allow write: if isAdmin();
     }
   }
 }

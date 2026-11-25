@@ -44,6 +44,7 @@ function header(active, bizTabs) {
 }
 
 function previewBar() {
+  if (!store.canEdit()) return `<div class="no-print" style="background:#eef4ff;border-bottom:1px solid #2f6fde;font-size:12px;padding:5px 24px"><b>閲覧専用</b>：このアカウントは、内容を見ることだけができます。登録・変更・メール送信・CSVの書き出しはできません。</div>`;
   if (!store.isPreview) return '';
   if (store.durable) {
     return `<div class="no-print" style="background:#e8f5ee;border-bottom:1px solid #1f8a5b;font-size:12px;padding:5px 24px">
@@ -117,8 +118,15 @@ window.addEventListener('hashchange', render);
 window.addEventListener('app:render', render);
 
 // 保存に失敗したときは、黙って進めずに知らせる
-window.addEventListener('unhandledrejection', (e) => {
+window.addEventListener('unhandledrejection', async (e) => {
   const m = (e.reason && e.reason.message) || '';
+  if (e.reason && e.reason.readOnly) { // 閲覧だけの人が変更しようとした：知らせて、画面のデータを元に戻す
+    e.preventDefault();
+    try { await store.init(store.backend); } catch (err) { /* 読み直せなくても、知らせは出す */ }
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    setTimeout(() => showFlash(m, 'err'), 50);
+    return;
+  }
   showFlash('保存できませんでした。画面を読み込み直して、もう一度お試しください。' + (m ? '（' + m + '）' : ''), 'err');
 });
 

@@ -7,6 +7,7 @@ import { publicUrl } from './logic.js';
 const isEmail = (s) => /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(s);
 
 export async function sendMail({ from, to, cc, subject, body, invoice, attachments }) {
+  store.guard();
   if (!from || !isEmail(from)) throw new Error('差し出し人（担当者）を選んでください。');
   for (const addr of (to + ',' + (cc || '')).split(',').map((s) => s.trim()).filter(Boolean)) {
     if (!isEmail(addr)) throw new Error('メールアドレスの形式が正しくありません：' + addr);

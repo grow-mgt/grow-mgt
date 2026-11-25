@@ -23,6 +23,7 @@ export class FirestoreBackend {
     this.fn = getFunctions(this.app, 'asia-northeast1');
     this.packCount = 0;
     this.admins = [];
+    this.viewers = [];
   }
 
   /* ---- 管理者（CSV・バックアップを書き出せる人） ---- */
@@ -31,6 +32,14 @@ export class FirestoreBackend {
     const list = [...new Set(emails.map((x) => String(x).trim().toLowerCase()).filter(Boolean))];
     await setDoc(doc(this.fs, 'meta', 'admins'), { emails: list, updated_at: new Date().toISOString(), updated_by: this.userEmail() });
     this.admins = list;
+  }
+
+  // 閲覧だけの人（税理士など）。名簿にある人は、見るだけで書き換えられない
+  isViewer() { return this.viewers.includes(String(this.userEmail() || '').toLowerCase()); }
+  async saveViewers(emails) {
+    const list = [...new Set(emails.map((x) => String(x).trim().toLowerCase()).filter(Boolean))];
+    await setDoc(doc(this.fs, 'meta', 'viewers'), { emails: list, updated_at: new Date().toISOString(), updated_by: this.userEmail() });
+    this.viewers = list;
   }
 
   /* ---- バックアップ ---- */
@@ -79,6 +88,8 @@ export class FirestoreBackend {
     if (st.exists()) out.settings = st.data().values || {};
     const ad = await getDoc(doc(this.fs, 'meta', 'admins'));
     this.admins = ad.exists() ? (ad.data().emails || []).map((x) => String(x).toLowerCase()) : [];
+    const vw = await getDoc(doc(this.fs, 'meta', 'viewers'));
+    this.viewers = vw.exists() ? (vw.data().emails || []).map((x) => String(x).toLowerCase()) : [];
     const ps = await getDocs(collection(this.fs, 'cbmPacks'));
     this.packCount = ps.size;
     out.cbmLines = ps.docs.map((d) => d.data()).sort((a, b) => a.n - b.n).flatMap((p) => p.lines || []);

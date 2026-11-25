@@ -20,6 +20,14 @@ async function isAdmin(auth) {
   return list.map((x) => String(x).toLowerCase()).includes(email);
 }
 
+// 閲覧だけの人（税理士など）か。名簿は meta/viewers の emails
+async function isViewer(auth) {
+  const email = String((auth && auth.token && auth.token.email) || "").toLowerCase();
+  const snap = await admin.firestore().doc("meta/viewers").get();
+  const list = snap.exists ? snap.data().emails || [] : [];
+  return list.map((x) => String(x).toLowerCase()).includes(email);
+}
+
 // 設定画面に登録してある担当者（差し出し人にできるのは、この人たちだけ）
 async function loadSettings() {
   const snap = await admin.firestore().doc("settings/main").get();
@@ -63,6 +71,7 @@ exports.sendMail = onCall(
   async (request) => {
     // ログインしていない人からの送信は受け付けない
     if (!request.auth) throw new HttpsError("unauthenticated", "ログインが必要です。");
+    if (await isViewer(request.auth)) throw new HttpsError("permission-denied", "閲覧だけの権限では、メールを送れません。");
 
     const { from, to, cc, subject, body, attachments, invoiceUrl } = request.data || {};
     const toList = splitList(to);

@@ -110,10 +110,19 @@ ${store.backend.kind !== 'firestore' ? `
 
 ${store.backend.kind === 'firestore' ? `
 <section class="card form" id="admins">
-  <h2>管理者（データを書き出せる人）</h2>
+  <h2>権限</h2>
+  <h2 style="margin-top:6px">管理者（データを書き出せる人）</h2>
   <p class="small muted">CSVの書き出し・CSVのメール送信・バックアップの実行とダウンロードは、ここに登録した人だけができます。ログインに使うメールアドレスを、1行に1つずつ入れてください。${store.canExport() ? '' : '（この欄を変えられるのは管理者だけです）'}</p>
   <textarea id="adminList" rows="4" class="mono"${store.canExport() ? '' : ' readonly'}>${h(store.backend.admins.join('\n'))}</textarea>
-  ${store.canExport() ? '<div class="btn-row"><button type="button" class="btn" id="adminSave">管理者を保存</button></div>' : ''}
+  <h2 style="margin-top:18px">閲覧だけの人（税理士など）</h2>
+  <p class="small muted">ここに登録した人は、すべての画面を見られますが、登録・変更・削除・メール送信・CSVの書き出しはできません。ログインに使うメールアドレスを、1行に1つずつ入れてください。ここにも管理者にも登録していない人は、編集（請求書の作成・送信）ができる担当者です。</p>
+  <textarea id="viewerList" rows="3" class="mono"${store.canExport() ? '' : ' readonly'}>${h(store.backend.viewers.join('\n'))}</textarea>
+  ${store.canExport() ? '<div class="btn-row"><button type="button" class="btn" id="adminSave">権限を保存</button></div>' : ''}
+  <table class="list small mt"><thead><tr><th>権限</th><th>できること</th><th>だれ</th></tr></thead><tbody>
+    <tr><td>閲覧</td><td>すべての画面を見る</td><td>上の「閲覧だけの人」</td></tr>
+    <tr><td>編集</td><td>閲覧に加えて、取引先・商品・請求書の登録と変更、メール送信、入金照合</td><td>ログインできる人のうち、閲覧だけの人以外</td></tr>
+    <tr><td>書き出し</td><td>編集に加えて、CSVの書き出し・CSVメール・バックアップ、この権限の変更</td><td>上の「管理者」</td></tr>
+  </tbody></table>
 </section>` : ''}
 
 <section class="card" id="backup">
@@ -144,8 +153,13 @@ ${store.backend.kind === 'firestore' ? `
         if (bad) { showFlash('メールアドレスの形式が正しくありません：' + bad, 'err'); return; }
         const me = String(store.backend.userEmail() || '').toLowerCase();
         if (!list.includes(me)) { showFlash('自分（' + me + '）を管理者から外すことはできません。ほかの管理者に外してもらってください。', 'err'); return; }
-        try { await store.backend.saveAdmins(list); flash('管理者を保存しました（' + list.length + '人）。'); go('settings'); }
-        catch (e) { showFlash('管理者を保存できませんでした。', 'err'); }
+        const vlist = root.querySelector('#viewerList').value.split(/[\n,、\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+        const vbad = vlist.find((x) => !isEmail(x));
+        if (vbad) { showFlash('メールアドレスの形式が正しくありません：' + vbad, 'err'); return; }
+        const both = vlist.find((x) => list.includes(x));
+        if (both) { showFlash('「' + both + '」が、管理者と閲覧だけの人の両方に入っています。どちらか片方にしてください。', 'err'); return; }
+        try { await store.backend.saveAdmins(list); await store.backend.saveViewers(vlist); flash('権限を保存しました（管理者' + list.length + '人・閲覧だけ' + vlist.length + '人）。'); go('settings'); }
+        catch (e) { showFlash('権限を保存できませんでした。', 'err'); }
       });
       // バックアップ（本番だけ・管理者だけ）
       if (store.backend.kind === 'firestore' && store.canExport()) {

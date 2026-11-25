@@ -52,6 +52,7 @@ export const store = {
     this.db = await this.backend.load();
     for (const k of ['businesses', 'clients', 'products', 'clientPrices', 'recurring', 'cbmLines', 'invoices', 'catalog']) this.db[k] = this.db[k] || [];
     this.db.settings = this.db.settings || {};
+    if (!this.canEdit()) return; // 閲覧だけの人は、下の「最初の1回だけの直し」も行わない
     await this.splitCbmConsul();
     await this.arrangeBusinesses();
     // メールの件名・本文を新しい文面にそろえる（最初の1回だけ。そのあと設定で変えた文面はそのまま使う）
@@ -86,6 +87,10 @@ export const store = {
     await this.saveBusiness({ ...old, id: Math.max(...this.db.businesses.map((b) => b.id)) + 1, name: 'コンサル', sort: old.sort + 1 });
   },
 
+  // 編集できる人か（閲覧だけの人＝税理士などは、見るだけ）
+  canEdit() { return !(this.backend.kind === 'firestore' && this.backend.isViewer()); },
+  // 書き換える前に確かめる。閲覧だけの人なら、ここで止める
+  guard() { if (!this.canEdit()) { const e = new Error('閲覧だけの権限のため、変更はできません。'); e.readOnly = true; throw e; } },
   // CSVやバックアップを書き出せる人か（本番は管理者だけ。プレビューは誰でも）
   canExport() { return this.backend.kind !== 'firestore' || this.backend.isAdmin(); },
 
@@ -108,21 +113,25 @@ export const store = {
   /* ---- 書く ---- */
   newId() { return Date.now() * 1000 + Math.floor(Math.random() * 1000); },
   async saveInvoice(inv) {
+    this.guard();
     inv.updated_at = nowUtc();
     const i = this.db.invoices.findIndex((v) => v.id === inv.id);
     if (i >= 0) this.db.invoices[i] = inv; else this.db.invoices.push(inv);
     await this.backend.put(this.db, 'invoices', inv.id, inv);
   },
   async deleteInvoice(id) {
+    this.guard();
     this.db.invoices = this.db.invoices.filter((v) => v.id !== Number(id));
     await this.backend.remove(this.db, 'invoices', Number(id));
   },
   async saveProduct(p) {
+    this.guard();
     const i = this.db.products.findIndex((x) => x.id === p.id);
     if (i >= 0) this.db.products[i] = p; else this.db.products.push(p);
     await this.backend.put(this.db, 'products', p.id, p);
   },
   async setClientPrice(clientId, productId, price, source = 'app') {
+    this.guard();
     this.db.clientPrices = this.db.clientPrices.filter((x) => !(x.client_id === clientId && x.product_id === productId));
     const key = clientId + '_' + productId;
     if (price == null) { await this.backend.remove(this.db, 'clientPrices', key); return; }
@@ -132,25 +141,30 @@ export const store = {
   },
   // 商品データ格納庫
   async saveCatalog(it) {
+    this.guard();
     const i = this.db.catalog.findIndex((x) => x.id === it.id);
     if (i >= 0) this.db.catalog[i] = it; else this.db.catalog.push(it);
     await this.backend.put(this.db, 'catalog', it.id, it);
   },
   async deleteCatalog(id) {
+    this.guard();
     this.db.catalog = this.db.catalog.filter((x) => x.id !== id);
     await this.backend.remove(this.db, 'catalog', id);
   },
   async saveBusiness(b) {
+    this.guard();
     const i = this.db.businesses.findIndex((x) => x.id === b.id);
     if (i >= 0) this.db.businesses[i] = b; else this.db.businesses.push(b);
     await this.backend.put(this.db, 'businesses', b.id, b);
   },
   async saveClient(c) {
+    this.guard();
     const i = this.db.clients.findIndex((x) => x.id === c.id);
     if (i >= 0) this.db.clients[i] = c; else this.db.clients.push(c);
     await this.backend.put(this.db, 'clients', c.id, c);
   },
   async deleteClient(id) {
+    this.guard();
     id = Number(id);
     this.db.clients = this.db.clients.filter((c) => c.id !== id);
     await this.backend.remove(this.db, 'clients', id);
@@ -158,6 +172,7 @@ export const store = {
     await this.replaceRecurring(id, []);
   },
   async deleteProduct(id) {
+    this.guard();
     id = Number(id);
     this.db.products = this.db.products.filter((p) => p.id !== id);
     await this.backend.remove(this.db, 'products', id);
@@ -165,6 +180,7 @@ export const store = {
   },
   // 取引先の「月額固定の明細」を入れ替える
   async replaceRecurring(clientId, rows) {
+    this.guard();
     clientId = Number(clientId);
     for (const old of this.db.recurring.filter((r) => r.client_id === clientId)) await this.backend.remove(this.db, 'recurring', old.id);
     this.db.recurring = this.db.recurring.filter((r) => r.client_id !== clientId);
@@ -177,6 +193,7 @@ export const store = {
   },
   // 取り込んだ明細を控えとして保存する（同じ月の控えは入れ替え）。後で下書きを作り直すために使う
   async saveCbmLines(tab, lines) {
+    this.guard();
     const base = this.newId();
     this.db.cbmLines = this.db.cbmLines.filter((l) => l.tab !== tab)
       .concat(lines.map((l, i) => ({ id: base + i, tab, sort: i, store: l.store, date: l.date || '', name: l.name, qty: l.qty, cost: l.cost ?? null,
@@ -185,11 +202,13 @@ export const store = {
   },
   // 設定をまとめて保存する（変わっていなければ何も書かない）
   async saveSettings(values) {
+    this.guard();
     let changed = false;
     for (const [k, v] of Object.entries(values)) if (this.setting(k) !== String(v)) { this.db.settings[k] = String(v); changed = true; }
     if (changed) await this.backend.put(this.db, 'settings', 'main', null);
   },
   async saveSetting(key, value) {
+    this.guard();
     this.db.settings[key] = String(value);
     await this.backend.put(this.db, 'settings', 'main', null);
   },
