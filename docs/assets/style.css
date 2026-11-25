@@ -464,6 +464,8 @@ th.sortable[data-dir="desc"]::after { content: " ▼"; font-size: 10px; }
 .kanri .kanri-in { width: 84px; text-align: right; border: 1px solid #e3d48a; border-radius: 4px; padding: 3px 5px; font: inherit; background: #fffdf0; }
 .kanri thead th { position: sticky; top: 0; }
 .badge.warn { background: #fff1d6; color: #9a5b00; }
+.badge.ok { background: #e3f6e8; color: #17703a; }
+.badge.err { background: #fde8e6; color: #b42318; }
 .head-row .btns { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 
 /* 請求書：題字を太く、宛名は題字より少し細く。宛名は1行に収める */

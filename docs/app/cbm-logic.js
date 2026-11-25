@@ -249,16 +249,66 @@ export function checkNoteOf(tab, inv) {
   return mine.concat(generalRemarks(tab).map((t) => `（請求書全体の備考）${t}`)).join('\n');
 }
 
+// 「令和8年10月分」のような月の書き方を、請求書の件名から取り出す
+const labelIn = (title) => { const m = /令和\d+年\d+月分/u.exec(String(title || '')); return m ? m[0] : ''; };
+/** その月・その取引先の請求書がすでにあるか。この画面で作ったもの → なければ、invoyなどから入れた同じ月（件名の「令和◯年◯月分」が同じ）のCBMの請求書 */
+export function existingFor(tab, cid, label) {
+  const ref = refOf(tab, cid), ml = label || monthLabel(tab);
+  return store.db.invoices.find((v) => v.source_ref === ref)
+    || (ml ? store.db.invoices.find((v) => v.client_id === cid && Number(v.business_id || 1) === 1 && !String(v.source_ref || '').startsWith('cbm:') && labelIn(v.title) === ml) : undefined);
+}
+/** CBMの請求書にある「◯月分」の一覧（新しい順） */
+export function monthLabels() {
+  const key = (t) => { const m = /令和(\d+)年(\d+)月分/u.exec(t); return Number(m[1]) * 100 + Number(m[2]); };
+  return [...new Set(store.db.invoices.filter((v) => Number(v.business_id || 1) === 1).map((v) => labelIn(v.title)).filter(Boolean))].sort((a, b) => key(b) - key(a));
+}
+
+/** 照合：PDFの明細と、すでにある請求書を見比べる。何も書き換えない */
+export function compare(tab, lines, label) {
+  const ml = label || monthLabel(tab);
+  const pl = plan(lines, {});
+  const stores = [...pl.stores.entries()].map(([name, s]) => ({ name, client_id: s.client_id, how: s.how, lines: s.lines,
+    cost: lines.filter((l) => l.store === name).reduce((a, l) => a + Math.round(l.qty * (l.cost || 0)), 0) }));
+  const rows = [];
+  for (const [cid, inv] of pl.invoices) {
+    const ex = existingFor(tab, cid, ml);
+    const row = { client_id: cid, client_name: inv.client_name, stores: [...inv.stores], lines: inv.lines.length, missing: inv.missing, calc: inv.subtotal, cost: inv.cost,
+      notes: [...new Set(inv.lines.filter((l) => l.note).map((l) => l.note))], inv: ex || null, base: null, other: 0, diff: null };
+    if (ex) {
+      // 既存の請求書のうち、消耗品にあたる金額：「購入額」の行があればそれ。なければ、月額固定（コンサルティングフィーなど）を除いた金額
+      const items = ex.items || [];
+      const buy = items.filter((it) => /購入額/.test(it.name));
+      const recNames = new Set(store.db.recurring.filter((r) => r.client_id === cid).map((r) => r.name));
+      const amt = (it) => (it.amount != null ? Number(it.amount) : Math.round(Number(it.qty) * Number(it.price)));
+      row.base = buy.length ? buy.reduce((a, it) => a + amt(it), 0) : items.filter((it) => !recNames.has(it.name)).reduce((a, it) => a + amt(it), 0);
+      row.other = Number(ex.subtotal) - row.base;
+      row.diff = inv.missing ? null : inv.subtotal - row.base;
+    }
+    rows.push(row);
+  }
+  rows.sort((a, b) => a.client_name.localeCompare(b.client_name, 'ja'));
+  // その月の請求書があるのに、PDFに出てこない取引先
+  const inPdf = new Set(rows.map((r) => r.client_id));
+  const onlyInv = store.db.invoices.filter((v) => Number(v.business_id || 1) === 1 && !inPdf.has(v.client_id)
+    && (labelIn(v.title) === ml || String(v.source_ref || '').startsWith('cbm:' + tab + ':')));
+  return { label: ml, stores, rows, onlyInv, unknownItems: [...pl.items.entries()].filter(([, i]) => !i.product_id).map(([n]) => n) };
+}
+/** 店名と取引先の対応を覚える（照合の画面から） */
+export async function rememberStore(storeName, clientId) {
+  const map = storeMap(); map[storeName] = clientId === 'skip' ? 'skip' : Number(clientId);
+  await store.saveSetting('cbm_store_map', JSON.stringify(map));
+}
+
 /** 下書きを作る。戻り値：作った請求書のidの配列 */
 export async function create(tab, pl, opt) {
   const created = [];
   for (const [cid, inv] of pl.invoices) {
     if (!opt.clients.includes(cid)) continue;
     const ref = refOf(tab, cid);
-    const existing = store.db.invoices.find((v) => v.source_ref === ref);
+    const existing = existingFor(tab, cid); // invoyなどから入れた同じ月の請求書も「すでにある」と数える（二重に作らないため）
     // すでにある請求書：送付済みなどは決して書き換えない。下書きは、未完成のもの・単価を手で入れたもの・「もう一度作る」のときだけ作り直す
     const manual = inv.lines.some((l) => l.from === '手入力');
-    if (existing && existing.status !== 'draft') { if (opt.skipped) opt.skipped.push(existing.number); continue; }
+    if (existing && (existing.status !== 'draft' || existing.source_ref !== ref)) { if (opt.skipped) opt.skipped.push(existing.number); continue; }
     if (existing && !(opt.again || existing.incomplete === 1 || manual)) continue;
     const items = [];
     for (const l of inv.lines) {
@@ -320,7 +370,7 @@ function rebuildTargets(tab, pl) {
   const drafts = new Map();
   for (const v of store.db.invoices) if (String(v.source_ref || '').startsWith('cbm:' + tab + ':')) drafts.set(v.client_id, v);
   const redo = [], fresh = [];
-  for (const cid of pl.invoices.keys()) { const d = drafts.get(cid); if (!d) fresh.push(cid); else if (d.status === 'draft' && d.incomplete === 1) redo.push(cid); }
+  for (const cid of pl.invoices.keys()) { const d = drafts.get(cid); if (!d) { if (!existingFor(tab, cid)) fresh.push(cid); } else if (d.status === 'draft' && d.incomplete === 1) redo.push(cid); }
   return { drafts, redo, fresh };
 }
 /** 作り直すと何件になるかを、先に数える（何も変えない） */

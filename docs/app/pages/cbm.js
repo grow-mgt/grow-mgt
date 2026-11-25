@@ -8,6 +8,8 @@ import { flash, showFlash, confirmBox } from '../ui.js';
 
 // 読み込み中の明細（画面を移動しても、作り終えるまで覚えておく）
 const work = { tab: '', lines: null, over: {} };
+// 照合だけ（何も保存しない）のときの、読み取った中身
+let check = null;
 const qtyText = (q) => Number(q).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const toDrafts = () => { setBiz(1); setFilter('draft', ''); go('list'); };
 // 作り直す前に、何が起きるかを件数で確かめてもらう
@@ -23,6 +25,7 @@ async function confirmRebuild(tab) {
 
 export function cbmPage() {
   if (store.canEdit()) cbm.fixStoreMap(); // 名前で覚えている対応を、取引先の番号に直しておく（取引先の名前を変えても切れないように）
+  if (check) return checkPage();
   if (!work.lines) return loadPage();
   return planPage();
 }
@@ -41,7 +44,8 @@ function loadPage() {
   <p class="small muted">シービーエムから届いた請求書のPDFを選んでください。2枚目・3枚目に分かれているときは、まとめて選びます（順番は自動でそろえます）。読み取った明細の合計が、請求書の小計と合うかを確かめてから取り込みます。</p>
   <label>PDFファイル<input type="file" name="files" accept="application/pdf,.pdf" multiple required></label>
   <p class="small" id="pdfMsg"></p>
-  <div class="actions"><button class="btn primary">PDFを読み込む</button></div>
+  <div class="actions"><button class="btn" name="mode" value="check">照合だけする（何も保存しない）</button><button class="btn primary" name="mode" value="load">PDFを読み込む</button></div>
+  <p class="small muted">「照合だけする」は、過去の月のPDFなどを、すでにある請求書・取引先と見比べるだけの機能です。請求書も取引先も作らず、何も書き換えません。</p>
 </form>
 
 <details class="card narrow-wide"><summary><b>貼り付けて読み込む</b> <span class="small muted">PDFに文字データがない月など</span></summary>
@@ -66,7 +70,8 @@ ${tabs.length ? `
     mount(root) {
       root.querySelector('#pdfForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const f = e.target, msg = root.querySelector('#pdfMsg'), btn = f.querySelector('button');
+        const f = e.target, msg = root.querySelector('#pdfMsg'), btn = f.querySelector('button.primary');
+        const onlyCheck = e.submitter && e.submitter.value === 'check';
         const picked = [...f.files.files];
         if (!picked.length) return;
         btn.disabled = true; msg.textContent = 'PDFを読んでいます…';
@@ -76,6 +81,7 @@ ${tabs.length ? `
         btn.disabled = false; msg.textContent = '';
         if (!res.month) { showFlash('請求日を読み取れませんでした。請求書の1枚目（請求日が書いてあるページ）も一緒に選んでください。', 'err'); return; }
         const tab = `${Number(res.month.slice(0, 4))}年${Number(res.month.slice(5))}月_明細`;
+        if (onlyCheck) { check = { tab, res, label: '' }; go('cbm'); return; }
         // 検算：明細の合計と、請求書の小計
         const problems = res.warnings.slice(0, 5);
         if (res.subtotal == null) problems.unshift('請求書の「小計」が見つかりませんでした（最後のページが入っていないかもしれません）。');
@@ -116,6 +122,104 @@ ${tabs.length ? `
         const res = await cbm.rebuild(b.dataset.rebuild);
         flash(res.msg, res.ids.length ? 'ok' : 'warn'); toDrafts();
       }));
+    },
+  };
+}
+
+/* ---------- 照合だけ（何も保存しない） ---------- */
+function checkPage() {
+  const { tab, res } = check;
+  const c = cbm.compare(tab, res.lines, check.label);
+  const labels = [...new Set([cbm.monthLabel(tab), ...cbm.monthLabels()])].filter(Boolean);
+  const allClients = [...store.db.clients].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  const cname = (id) => (store.client(id) || {}).name || '';
+  const HOW = { exact: ['一致', ''], map: ['対応表', ''], manual: ['請求しない', ''], partial: ['名前の一部が同じ', 'warn'], guess: ['似た名前（要確認）', 'err'], none: ['見つからない', 'err'] };
+  const badStores = c.stores.filter((s) => s.how === 'guess' || s.how === 'none');
+  const sumOk = res.subtotal != null && res.subtotal === res.sum;
+  const same = c.rows.filter((r) => r.inv && r.diff === 0).length;
+  const differ = c.rows.filter((r) => r.inv && r.diff !== null && r.diff !== 0).length;
+  const noPrice = c.rows.filter((r) => r.missing > 0).length;
+  const noInv = c.rows.filter((r) => !r.inv).length;
+  const stText = { draft: '下書き', sent: '送付済み', paid: '入金済み' };
+  const state = (r) => {
+    if (!r.inv) return '<span class="badge err">請求書がない</span>';
+    if (r.missing) return `<span class="badge warn">価格が未設定 ${r.missing}行</span>`;
+    return r.diff === 0 ? '<span class="badge ok">一致</span>' : '<span class="badge err">金額が違う</span>';
+  };
+  const html = `
+<p class="crumb"><a href="#list">請求書</a> › <a href="#cbm" id="ckBack">シービーエムの明細から作る</a> ›</p>
+<h1>照合：「${h(tab)}」のPDFと、今あるデータ</h1>
+<p class="muted">見比べているだけで、<b>まだ何も保存していません</b>。請求書も取引先も変わりません。</p>
+
+<div class="card">
+  <h2>まとめ</h2>
+  <table class="mini">
+    <tr><td>PDFの読み取り</td><td>${res.lines.length}行・税抜 ${nf(res.sum)}円 ${sumOk ? '<span class="badge ok">請求書の小計と一致</span>' : `<span class="badge err">請求書の小計（${res.subtotal == null ? '見つからない' : nf(res.subtotal) + '円'}）と合わない</span>`}</td></tr>
+    <tr><td>店名と取引先</td><td>${c.stores.length}店のうち、${badStores.length ? `<span class="badge err">確認が必要 ${badStores.length}店</span>` : '<span class="badge ok">すべて取引先が決まっています</span>'}</td></tr>
+    <tr><td>請求書との見比べ</td><td>一致 ${same}件／金額が違う ${differ}件／価格が未設定 ${noPrice}件／請求書がない ${noInv}件${c.onlyInv.length ? `／PDFにない請求書 ${c.onlyInv.length}件` : ''}</td></tr>
+    <tr><td>見比べる月</td><td><select id="ckLabel">${labels.map((l) => `<option${l === c.label ? ' selected' : ''}>${h(l)}</option>`).join('')}</select> <span class="small muted">請求書の件名の「◯月分」で探しています。月がずれているときは、ここで変えてください。</span></td></tr>
+  </table>
+  ${res.warnings.length ? `<p class="small" style="color:#b42318">読み取りの注意：${res.warnings.slice(0, 5).map(h).join('／')}</p>` : ''}
+  ${res.notes.length || res.general.length ? `<p class="small"><b>PDFに備考があります（${res.notes.length + res.general.length}件）。</b>取り込んだあと、該当の請求書を目で確かめてください。${res.general.map((t) => '<br>・' + h(t)).join('')}</p>` : ''}
+</div>
+
+<div class="card">
+  <h2>1. 店名と取引先</h2>
+  <p class="small muted">PDFの店名が、どの取引先にあたるかです。赤いものをそのままにして取り込むと、取引先が二重にできる原因になります。正しい取引先を選んで「覚える」を押してください（この対応だけは保存されます）。</p>
+  <table class="list small"><thead><tr><th>PDFの店名</th><th>取引先</th><th>判定</th><th class="r">行数</th><th class="r">CBMの金額（税抜）</th><th>直す</th></tr></thead><tbody>
+  ${c.stores.map((s, i) => { const hw = HOW[s.how] || [s.how, '']; const need = s.how === 'guess' || s.how === 'none' || s.how === 'partial'; return `<tr>
+    <td>${h(s.name)}</td><td>${s.client_id === 'skip' ? '（請求しない）' : h(cname(s.client_id)) || '<span class="muted">—</span>'}</td>
+    <td><span class="badge ${hw[1]}">${hw[0]}</span></td><td class="r">${s.lines}</td><td class="r">${nf(s.cost)}</td>
+    <td style="white-space:nowrap">${need && store.canEdit() ? `<select data-ck-sel="${i}" style="max-width:200px"><option value="">取引先を選ぶ…</option>${allClients.map((x) => `<option value="${x.id}"${x.id === s.client_id ? ' selected' : ''}>${h(x.name)}</option>`).join('')}<option value="skip">（請求しない店）</option></select> <button type="button" class="btn small" data-ck-save="${i}">覚える</button>` : ''}</td></tr>`; }).join('')}
+  </tbody></table>
+  ${c.stores.some((s) => s.how === 'none') ? '<p class="small muted">一覧に取引先がない新しい店は、先に「取引先」の画面で登録してから、もう一度照合してください。</p>' : ''}
+</div>
+
+<div class="card">
+  <h2>2. 請求書との見比べ（${h(c.label)}）</h2>
+  <p class="small muted">「PDFから計算」は、PDFの数量 × 今登録してある販売単価です。「今ある請求書」は、月額固定（コンサルティングフィーなど）を除いた、消耗品の金額です。過去の月は、当時と単価が違うと差が出ます。</p>
+  <table class="list small"><thead><tr><th>取引先</th><th>今ある請求書</th><th class="r">今ある請求書（税抜）</th><th class="r">PDFから計算（税抜）</th><th class="r">差</th><th>結果</th></tr></thead><tbody>
+  ${c.rows.map((r) => `<tr>
+    <td>${h(r.client_name)}${r.stores.length > 1 ? ` <span class="muted">（${r.stores.length}店）</span>` : ''}</td>
+    <td>${r.inv ? `<a href="#invoice-${r.inv.id}">${h(r.inv.number)}</a> <span class="muted">${stText[r.inv.status] || ''}</span>` : '<span class="muted">なし</span>'}</td>
+    <td class="r">${r.inv ? nf(r.base) + (r.other ? `<br><span class="muted">ほか ${nf(r.other)}</span>` : '') : ''}</td>
+    <td class="r">${r.missing ? `<span class="muted">${nf(r.calc)}＋未設定</span>` : nf(r.calc)}</td>
+    <td class="r">${r.diff == null ? '' : (r.diff > 0 ? '+' : '') + nf(r.diff)}</td>
+    <td>${state(r)}${r.notes.length ? ' <span class="badge warn">備考あり</span>' : ''}</td></tr>`).join('')}
+  ${c.onlyInv.map((v) => `<tr><td>${h(cname(v.client_id))}</td><td><a href="#invoice-${v.id}">${h(v.number)}</a> <span class="muted">${stText[v.status] || ''}</span></td><td class="r">${nf(v.subtotal)}</td><td class="r muted">PDFにない</td><td></td><td><span class="badge warn">PDFにない</span></td></tr>`).join('')}
+  </tbody></table>
+  ${c.unknownItems.length ? `<p class="small muted">商品に登録のない品名（${c.unknownItems.length}件）：${c.unknownItems.slice(0, 8).map(h).join('、')}${c.unknownItems.length > 8 ? ' ほか' : ''}</p>` : ''}
+</div>
+
+<div class="card">
+  <h2>3. このあと</h2>
+  <p class="small muted">「明細だけ取り込む」は、PDFの明細を控え（年間管理表のもと）として保存します。<b>請求書は作らず、今ある請求書も変えません。取引先も作りません。</b></p>
+  ${badStores.length ? `<p class="small" style="color:#b42318">店名と取引先の確認が必要なものが ${badStores.length}店あります。上の表で直してから取り込めます。</p>` : ''}
+  ${!sumOk ? '<p class="small" style="color:#b42318">PDFの読み取った合計が、請求書の小計と合っていません。ページがそろっているか確かめてください。</p>' : ''}
+  <div class="actions"><button type="button" class="btn" id="ckCancel">何もせずに戻る</button>${store.canEdit() ? `<button type="button" class="btn primary" id="ckImport"${badStores.length || !sumOk ? ' disabled' : ''}>明細だけ取り込む</button>` : ''}</div>
+</div>`;
+  return {
+    title: '照合 | シービーエム', active: 'list', html,
+    mount(root) {
+      const back = () => { check = null; go('cbm'); };
+      root.querySelector('#ckCancel').addEventListener('click', back);
+      root.querySelector('#ckBack').addEventListener('click', (e) => { e.preventDefault(); back(); });
+      root.querySelector('#ckLabel').addEventListener('change', (e) => { check.label = e.target.value; go('cbm'); });
+      root.querySelectorAll('[data-ck-save]').forEach((b) => b.addEventListener('click', async () => {
+        const i = Number(b.dataset.ckSave), v = root.querySelector(`[data-ck-sel="${i}"]`).value;
+        if (!v) { showFlash('取引先を選んでください。', 'err'); return; }
+        await cbm.rememberStore(c.stores[i].name, v);
+        flash(`「${c.stores[i].name}」の取引先を覚えました。`); go('cbm');
+      }));
+      const imp = root.querySelector('#ckImport');
+      if (imp) imp.addEventListener('click', async () => {
+        const had = cbm.storedTabs().includes(tab);
+        if (!(await confirmBox(`「${tab}」の明細（${res.lines.length}行）を、控えとして保存します。請求書と取引先は変わりません。` + (had ? `\n\nすでにある控え（${cbm.storedLines(tab).length}行）は、この内容に入れ替わります。` : '') + '\n\nよろしいですか？', '明細だけ取り込む'))) return;
+        await store.saveCbmLines(tab, res.lines);
+        await cbm.saveGeneralRemarks(tab, res.general);
+        check = null;
+        flash(`「${tab}」の明細を取り込みました（${res.lines.length}行）。請求書と取引先は変えていません。`); go('cbm');
+      });
     },
   };
 }

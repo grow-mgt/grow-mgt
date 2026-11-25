@@ -17,7 +17,6 @@ import { paymentsPage } from './pages/payments.js';
 import { reportPage } from './pages/report.js';
 import { settingsPage } from './pages/settings.js';
 import { catalogPage, catalogEditPage } from './pages/catalog.js';
-import { invoyPage } from './pages/invoy.js';
 import { expectPage, bulkMailPage } from './pages/batch.js';
 import { artifactBackendOrNull } from './backend-artifact.js';
 
@@ -76,7 +75,6 @@ function render() {
   else if (route === 'payments') page = paymentsPage();
   else if (route === 'report') page = reportPage();
   else if (route === 'settings') page = settingsPage();
-  else if (route === 'invoy') page = invoyPage();
   else if (route === 'expect') page = expectPage();
   else if (route === 'bulkmail') page = bulkMailPage(arg.split('-').map(Number).filter(Boolean));
   else if (route === 'catalog') page = catalogPage();

@@ -82,7 +82,7 @@ export function listPage() {
     html += `<div class="head-row">
       <h1>${h(B.name)} <span class="muted small">の${word}</span></h1>
       <div class="btns">
-        ${bid === 1 ? `<a class="btn" href="#invoy">invoyから取り込む</a><a class="btn" href="#cbm">シービーエムの明細から作る</a>` : ''}
+        ${bid === 1 ? `<a class="btn" href="#cbm">シービーエムの明細から作る</a>` : ''}
         ${rec ? `<a class="btn" href="#expect">毎月の入金予定をまとめて作る</a>` : `<a class="btn" href="#fixed">毎月の固定の請求をまとめて作る</a>`}
         <a class="btn" href="#sheet">スプシを最新にする</a>
         <a class="btn primary" href="#new">＋ ${word}を作る</a>
