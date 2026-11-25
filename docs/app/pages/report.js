@@ -3,6 +3,7 @@ import { store } from '../store.js';
 import { state, go, setBiz } from '../nav.js';
 import { h, yen, nf, today } from '../util.js';
 import { showFlash } from '../ui.js';
+import { bizShares } from '../logic.js';
 
 const sel = { fy: 0, basis: 'target' };
 const pad = (n) => String(n).padStart(2, '0');
@@ -37,21 +38,28 @@ export function reportPage() {
   if (basis !== 'paid') for (const r of invs) {
     const m = basis === 'issue' ? String(r.issue_date).slice(0, 7) : targetMonth(r);
     if (!inMonths.has(m)) continue;
-    const b = r.business_id;
-    add(sales, b, m, r.total);
     // invoyから取り込んだ請求書は明細がないので、税抜は分からない（税込のまま数える）
     const isInvoy = r.source_ref === 'invoy' && Number(r.tax) === 0;
     if (isInvoy) noBreak++;
-    add(ex, b, m, isInvoy ? r.total : r.subtotal);
-    if (bid && b === bid) add(byClient, cname(r.client_id), m, r.total);
+    for (const sh of bizShares(r)) { // 同梱した品目を別の事業に数えるときは、事業ごとに分ける
+      add(sales, sh.biz, m, sh.total);
+      add(ex, sh.biz, m, isInvoy ? sh.total : sh.ex);
+      if (bid && sh.biz === bid) add(byClient, cname(r.client_id), m, sh.total);
+    }
   }
-  for (const v of store.db.invoices) for (const p of v.payments || []) {
-    const m = String(p.paid_date).slice(0, 7);
-    if (!inMonths.has(m)) continue;
-    add(paid, v.business_id, m, Number(p.amount));
-    if (basis === 'paid') { add(sales, v.business_id, m, Number(p.amount)); if (bid && v.business_id === bid) add(byClient, cname(v.client_id), m, Number(p.amount)); }
+  for (const v of store.db.invoices) {
+    const shares = bizShares(v);
+    for (const p of v.payments || []) {
+      const m = String(p.paid_date).slice(0, 7);
+      if (!inMonths.has(m)) continue;
+      for (const sh of shares) { // 入金も、請求額の割合で事業に分ける
+        const amt = Math.round(Number(p.amount) * sh.ratio);
+        add(paid, sh.biz, m, amt);
+        if (basis === 'paid') { add(sales, sh.biz, m, amt); if (bid && sh.biz === bid) add(byClient, cname(v.client_id), m, amt); }
+      }
+    }
   }
-  for (const r of invs) if (r.status !== 'paid') unpaidNow[r.business_id] = (unpaidNow[r.business_id] || 0) + r.total - r.paid_amount;
+  for (const r of invs) if (r.status !== 'paid') for (const sh of bizShares(r)) unpaidNow[sh.biz] = (unpaidNow[sh.biz] || 0) + Math.round((r.total - r.paid_amount) * sh.ratio);
 
   const bizList = bid ? [store.bizOf(bid)] : store.businesses();
   const rowOf = (obj, id) => months.map((m) => (obj[id] || {})[m] || 0);

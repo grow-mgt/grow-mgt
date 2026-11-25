@@ -143,3 +143,31 @@ export function fillTemplate(tpl, inv) {
   for (const [k, v] of Object.entries(map)) out = out.split(k).join(v);
   return out.replace(/\n{3,}/g, '\n\n');
 }
+
+/* ---------- 月次集計で、請求書の売上を事業ごとに分ける ----------
+   取引先の「月額固定の請求」で「集計する事業」を選んだ品目（例：消耗品の請求書に同梱したコンサルティングフィー）は、
+   その事業の売上として数える。戻り値：[{ biz, ex（税抜）, total（税込）, ratio（請求額に占める割合） }] */
+export function bizShares(inv) {
+  const own = inv.business_id;
+  const total = Number(inv.total) || 0, subtotal = Number(inv.subtotal) || 0;
+  const recs = store.db.recurring.filter((r) => r.client_id === inv.client_id && Number(r.report_biz) && Number(r.report_biz) !== own);
+  if (!recs.length || !(inv.items || []).length) return [{ biz: own, ex: subtotal, total, ratio: 1 }];
+  const out = new Map();
+  for (const r of recs) {
+    const its = inv.items.filter((it) => !it.product_id && String(it.name).trim() === String(r.name).trim());
+    if (!its.length) continue;
+    const b = Number(r.report_biz), cur = out.get(b) || [];
+    for (const it of its) if (!cur.includes(it)) cur.push(it);
+    out.set(b, cur);
+  }
+  if (!out.size) return [{ biz: own, ex: subtotal, total, ratio: 1 }];
+  const shares = []; let restEx = subtotal, restIn = total;
+  for (const [b, its] of out) {
+    const c = calcInvoice(its, false, inv.tax_mode === 'include' ? 'include' : 'exclude');
+    shares.push({ biz: b, ex: c.subtotal, total: c.total });
+    restEx -= c.subtotal; restIn -= c.total;
+  }
+  shares.unshift({ biz: own, ex: restEx, total: restIn });
+  for (const x of shares) x.ratio = total ? x.total / total : 0;
+  return shares;
+}

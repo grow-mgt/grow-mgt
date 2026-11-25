@@ -93,9 +93,10 @@ function recRow(r) {
     <td><input class="runit" value="${h(r.unit)}" placeholder="式"></td>
     <td><input class="r rprice" value="${h(r.price)}" inputmode="numeric"></td>
     <td><select class="rrate">${RATES.map(([v, l]) => `<option value="${v}"${Number(r.tax_rate) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td>
+    <td><select class="rbiz"><option value="0">請求書と同じ</option>${store.businesses().map((b) => `<option value="${b.id}"${Number(r.report_biz) === b.id ? ' selected' : ''}>${h(b.name)}</option>`).join('')}</select></td>
   </tr>`;
 }
-const BLANK_REC = { name: '', qty: 1, unit: '', price: '', tax_rate: 10 };
+const BLANK_REC = { name: '', qty: 1, unit: '', price: '', tax_rate: 10, report_biz: 0 };
 
 export function clientEditPage(arg) {
   const isNew = arg === 'new';
@@ -138,10 +139,10 @@ export function clientEditPage(arg) {
   </div>
 
   <h2>${crec ? '毎月の入金（家賃など）' : '月額固定の請求'}</h2>
-  <p class="small muted">${crec ? '毎月決まって入金されるもの。「毎月の入金予定をまとめて作る」で、この金額の入金予定が毎月作られます。' : 'コンサルティングフィーなど毎月同じ金額のもの。この取引先の請求書を作るとき、ボタン1つで明細に入ります。'}</p>
+  <p class="small muted">${crec ? '毎月決まって入金されるもの。「毎月の入金予定をまとめて作る」で、この金額の入金予定が毎月作られます。' : 'コンサルティングフィーなど毎月同じ金額のもの。この取引先の請求書を作るとき、ボタン1つで明細に入ります。「月次集計で数える事業」を選ぶと、請求書は1枚のまま、その品目の売上だけを選んだ事業に数えます。'}</p>
   <div class="table-wrap">
   <table class="items" id="rec">
-    <thead><tr><th>品名・内容</th><th class="w-qty">数量</th><th class="w-unit">単位</th><th class="w-price">単価（税抜）</th><th class="w-rate">税率</th></tr></thead>
+    <thead><tr><th>品名・内容</th><th class="w-qty">数量</th><th class="w-unit">単位</th><th class="w-price">単価（税抜）</th><th class="w-rate">税率</th><th>月次集計で数える事業</th></tr></thead>
     <tbody>${[...rec, BLANK_REC].map(recRow).join('')}</tbody>
   </table>
   </div>
@@ -223,9 +224,9 @@ ${c.id ? '<div class="danger-zone"><button class="btn danger small" id="delClien
         for (const tr of root.querySelectorAll('#rec tbody tr')) {
           const nm = tr.querySelector('.rname').value.trim(); if (nm === '') continue;
           const rate = Number(tr.querySelector('.rrate').value);
-          recNew.push({ name: nm, qty: parseFloat(tr.querySelector('.rqty').value) || 1, unit: tr.querySelector('.runit').value.trim(), price: toIntOrNull(tr.querySelector('.rprice').value) || 0, tax_rate: [10, 8, 0].includes(rate) ? rate : 10 });
+          recNew.push({ name: nm, qty: parseFloat(tr.querySelector('.rqty').value) || 1, unit: tr.querySelector('.runit').value.trim(), price: toIntOrNull(tr.querySelector('.rprice').value) || 0, tax_rate: [10, 8, 0].includes(rate) ? rate : 10, report_biz: Number(tr.querySelector('.rbiz').value) || 0 });
         }
-        const pick = (r) => JSON.stringify([r.name, Number(r.qty), r.unit, Number(r.price), Number(r.tax_rate)]);
+        const pick = (r) => JSON.stringify([r.name, Number(r.qty), r.unit, Number(r.price), Number(r.tax_rate), Number(r.report_biz) || 0]);
         if (rec.map(pick).join('|') !== recNew.map(pick).join('|')) await store.replaceRecurring(target.id, recNew);
 
         flash('取引先を保存しました。');
