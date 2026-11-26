@@ -115,7 +115,7 @@ export function settingsPage() {
     </select><small>手で請求書を作るときの初期値です。CBMの明細と固定の請求は、いつも翌月末になります。</small></label>
   </div>
 </section>
-  <div class="actions save-bar"><button class="btn primary">保存</button></div>
+  <div class="actions save-bar"><span class="hint">事業・発行元の情報・メール送信・請求書の初期値を、まとめて保存します。</span><button class="btn primary">保存</button></div>
 </form>
 
 ${store.backend.kind !== 'firestore' ? `

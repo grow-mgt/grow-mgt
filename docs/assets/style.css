@@ -530,4 +530,9 @@ th.sortable[data-dir="desc"]::after { content: " ▼"; font-size: 10px; }
 .pick-item:hover { background: #f1f4f9; }
 .pick-item.on { background: #e8f0ff; font-weight: 600; }
 .pick-item[hidden] { display: none; }
-.save-bar { margin: 0 0 20px; }
+/* 設定の「保存」は、画面の下にいつも出しておく（3つの枠のどこを直していても押せるように） */
+.save-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; margin: 0; padding: 10px max(24px, calc((100vw - 1180px) / 2 + 24px)); background: rgba(244,245,248,.92); backdrop-filter: blur(4px); border-top: 1px solid var(--line); align-items: center; }
+.save-bar .hint { margin-right: auto; font-size: 12px; color: var(--muted); }
+main:has(.save-bar) { padding-bottom: 84px; }
+@media (max-width: 640px) { .save-bar { padding: 10px 16px; } .save-bar .hint { display: none; } }
+@media print { .save-bar { display: none; } }
