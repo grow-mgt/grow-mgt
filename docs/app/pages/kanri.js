@@ -30,7 +30,7 @@ export function kanriPage() {
 
   const html = `
 <div class="head-row">
-  <h1>年次集計 <span class="muted small">${fy}年度（${fy}年4月〜${fy + 1}年3月）・CBM・金額はすべて税込</span></h1>
+  <h1>年次集計 <span class="muted small">${fy}年度（${fy}年4月〜${fy + 1}年3月）・CBM</span> <span class="badge warn" style="font-size:13px">税込表示</span></h1>
   <div class="btns">
     <button class="btn small" data-fy="${fy - 1}">← ${fy - 1}年度</button>
     <button class="btn small" data-fy="${fy + 1}">${fy + 1}年度 →</button>
@@ -58,15 +58,15 @@ ${empty ? '<div class="empty">年次集計はまだ空です。下の「スプ�
 <div class="table-wrap">
 <table class="list report kanri">
   <thead>
-    <tr><th>卸先名</th>${k.months.map((ym) => `<th class="r">${tabOf(ym) ? `<a href="#kanri" data-ym="${ym}">${ymLabel(ym)}</a>` : ymLabel(ym)}</th>`).join('')}<th class="r">年間合計</th></tr>
+    <tr><th>卸先名 <span class="badge b-sheet">金額はすべて税込</span></th>${k.months.map((ym) => `<th class="r">${tabOf(ym) ? `<a href="#kanri" data-ym="${ym}">${ymLabel(ym)}</a>` : ymLabel(ym)}</th>`).join('')}<th class="r">年間合計（税込）</th></tr>
   </thead>
   <tbody>
   ${k.groups.map((g) => g.rows.map((r) => `
     <tr><td>${h(r.name)}${r.isNew ? ' <span class="badge warn">新しい卸先</span>' : ''}</td>${rowCells(r)}<td class="r b">${nf(sum(r.vals.map(inTax)))}</td></tr>`).join('') + `
-    <tr class="r-total"><td>${h(g.name)} 小計</td>${totalCells(g.subTax)}<td class="r">${nf(sum(g.subTax))}</td></tr>`).join('')}
-    <tr class="r-total"><td>仕入 合計</td>${totalCells(k.totalTax)}<td class="r">${nf(sum(k.totalTax))}</td></tr>
-    <tr class="r-top"><td><b>売上</b></td>${totalCells(pf.sales)}<td class="r b">${nf(pf.salesYear)}</td></tr>
-    <tr><td><b>粗利</b></td>${pf.per.map((x) => `<td class="r${x.profit == null ? ' zero' : (x.profit < 0 ? ' warn' : '')}">${x.profit == null ? '-' : nf(x.profit)}</td>`).join('')}<td class="r b">${pf.year.profit == null ? '-' : nf(pf.year.profit)}</td></tr>
+    <tr class="r-total"><td>${h(g.name)} 小計（税込）</td>${totalCells(g.subTax)}<td class="r">${nf(sum(g.subTax))}</td></tr>`).join('')}
+    <tr class="r-total"><td>仕入 合計（税込）</td>${totalCells(k.totalTax)}<td class="r">${nf(sum(k.totalTax))}</td></tr>
+    <tr class="r-top"><td><b>売上（税込）</b></td>${totalCells(pf.sales)}<td class="r b">${nf(pf.salesYear)}</td></tr>
+    <tr><td><b>粗利（税込）</b></td>${pf.per.map((x) => `<td class="r${x.profit == null ? ' zero' : (x.profit < 0 ? ' warn' : '')}">${x.profit == null ? '-' : nf(x.profit)}</td>`).join('')}<td class="r b">${pf.year.profit == null ? '-' : nf(pf.year.profit)}</td></tr>
     <tr><td><b>利益率</b></td>${pf.per.map((x) => `<td class="r${x.rate == null ? ' zero' : ''}">${pct(x.rate)}</td>`).join('')}<td class="r b">${pct(pf.year.rate)}</td></tr>
   </tbody>
 </table>

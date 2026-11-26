@@ -67,7 +67,7 @@ export function reportPage() {
   const pct = (v) => (v == null ? '-' : v.toFixed(1) + '%');
   const profitRows = () => `
       <tr class="r-sub"><td></td><td class="small muted">仕入（税込）</td>${cells(cost)}<td class="r b">${nf(sum(cost))}</td></tr>
-      <tr class="r-sub"><td></td><td class="small muted">粗利</td>${prof.map((x) => `<td class="r${x.profit == null ? ' zero' : (x.profit < 0 ? ' warn' : '')}">${x.profit == null ? '-' : nf(x.profit)}</td>`).join('')}<td class="r b">${profYear.profit == null ? '-' : nf(profYear.profit)}</td></tr>
+      <tr class="r-sub"><td></td><td class="small muted">粗利（税込）</td>${prof.map((x) => `<td class="r${x.profit == null ? ' zero' : (x.profit < 0 ? ' warn' : '')}">${x.profit == null ? '-' : nf(x.profit)}</td>`).join('')}<td class="r b">${profYear.profit == null ? '-' : nf(profYear.profit)}</td></tr>
       <tr class="r-sub"><td></td><td class="small muted">利益率</td>${prof.map((x) => `<td class="r${x.rate == null ? ' zero' : ''}">${pct(x.rate)}</td>`).join('')}<td class="r b">${pct(profYear.rate)}</td></tr>`;
 
   const html = `
