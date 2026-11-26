@@ -28,15 +28,16 @@ export function staffList() {
 
 const bizForm = (b) => `
   <form class="biz-form${b ? '' : ' new'}" data-biz-form="${b ? b.id : 0}">
-    <div class="grid4 biz-grid">
-      <label>${b ? '事業の名前' : '新しい事業の名前'}<input name="biz_name" value="${b ? h(b.name) : ''}"${b ? '' : ' placeholder="例：〇〇事業"'}></label>
-      <label>使い方<select name="biz_kind">
+    <div class="biz-grid">
+      ${b ? `<i class="biz-dot c${(b.id - 1) % 6}" aria-hidden="true"></i>` : '<i class="biz-dot plus" aria-hidden="true">＋</i>'}
+      <label><span>${b ? '事業の名前' : '新しい事業の名前'}</span><input name="biz_name" value="${b ? h(b.name) : ''}"${b ? '' : ' placeholder="新しい事業の名前"'}></label>
+      <label><span>使い方</span><select name="biz_kind">
         <option value="invoice"${!b || b.kind !== 'reconcile' ? ' selected' : ''}>請求書を発行する</option>
         <option value="reconcile"${b && b.kind === 'reconcile' ? ' selected' : ''}>入金の消し込みだけ</option>
       </select></label>
-      <label>振込先${b ? '（この事業の口座）' : ''}<input name="biz_bank" value="${b ? h(b.bank) : ''}"${b ? ' placeholder="〇〇銀行 〇〇支店 普通 0000000 カ）グロウ"' : ''}></label>
+      <label><span>振込先（この事業の口座）</span><input name="biz_bank" value="${b ? h(b.bank) : ''}" placeholder="〇〇銀行 〇〇支店 普通 0000000 カ）グロウ"></label>
+      ${b ? '<span class="biz-end"></span>' : '<span class="biz-end"><button class="btn small">追加</button></span>'}
     </div>
-    ${b ? '' : '<button class="btn small">事業を追加</button>'}
   </form>`;
 
 const staffRow = (s) => `<tr>
@@ -52,7 +53,10 @@ export function settingsPage() {
 <section class="card form" id="biz">
   <h2>事業</h2>
   <p class="small muted">GROWの事業ごとに、振込先の口座と使い方を決めます。「入金の消し込みだけ」の事業は、請求書を送らずに入金予定と銀行の入金を突き合わせます。銀行CSVの列の設定は、入金照合の画面で事業ごとに覚えます。</p>
-  <div class="biz-forms">${store.businesses().map(bizForm).join('')}${bizForm(null)}</div>
+  <div class="biz-forms">
+    <div class="biz-head" aria-hidden="true"><i></i><span>事業の名前</span><span>使い方</span><span>振込先（この事業の口座）</span><span></span></div>
+    ${store.businesses().map(bizForm).join('')}${bizForm(null)}
+  </div>
 </section>
 
 <form class="card form" id="mainForm">

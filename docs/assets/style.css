@@ -369,12 +369,33 @@ input.warn-input { border-color: #f0a3a3; background: #fff; }
 .biz-card dt { color: var(--muted); } .biz-card dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .biz-card dd.warn { color: var(--warn); }
 .bulk-bar { top: 96px; }
-.biz-forms { display: grid; gap: 10px; }
-.biz-form { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 14px 12px; }
-.biz-form.new { border-style: dashed; }
-.biz-form label { margin-bottom: 8px; }
-/* 事業の欄は、広い画面では1列（1行）に並べる */
-@media (min-width: 641px) { .biz-grid { grid-template-columns: 1.1fr 1fr 2.6fr; align-items: start; } }
+/* 設定：事業の一覧（表のように、1事業を1行で） */
+.biz-forms { border: 1px solid var(--line); border-radius: var(--radius); background: #fff; overflow: hidden; }
+.biz-head, .biz-grid { display: grid; grid-template-columns: 10px 1.1fr 1fr 2.6fr 64px; gap: 0 12px; align-items: center; }
+.biz-head { padding: 9px 16px; background: #f6f7f9; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.biz-head span { padding-left: 11px; }
+.biz-form { padding: 5px 16px; border-top: 1px solid #eef0f3; transition: background .12s; }
+.biz-head + .biz-form { border-top: 0; }
+.biz-form:hover, .biz-form:focus-within { background: #f9fafc; }
+.biz-form label { margin: 0; }
+.biz-form label > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.biz-form input, .biz-form select { margin: 0; border-color: transparent; background: transparent; padding: 8px 10px; }
+.biz-form [name=biz_name] { font-weight: 600; }
+.biz-form [name=biz_bank] { font-variant-numeric: tabular-nums; }
+.biz-form:hover input, .biz-form:hover select { border-color: #dfe3ea; background: #fff; }
+.biz-form input:focus, .biz-form select:focus { border-color: var(--accent); background: #fff; }
+.biz-dot { display: block; width: 10px; height: 10px; border-radius: 3px; }
+.biz-dot.plus { width: auto; height: auto; background: none; color: var(--muted); font-style: normal; font-size: 13px; line-height: 1; margin-left: -2px; }
+.biz-end { text-align: right; }
+.biz-form.new { background: #fbfcfd; border-top: 1px dashed #d5d9e0; }
+.biz-form.new input, .biz-form.new select { border-color: #dfe3ea; background: #fff; }
+@media (max-width: 640px) {
+  .biz-head { display: none; }
+  .biz-grid { grid-template-columns: 10px 1fr; gap: 6px 10px; }
+  .biz-grid label, .biz-end { grid-column: 2; }
+  .biz-form { padding: 10px 12px; }
+  .biz-form input, .biz-form select { border-color: #dfe3ea; background: #fff; }
+}
 .kv { margin: 0 0 14px; display: grid; gap: 8px; }
 .kv div { display: grid; grid-template-columns: 120px 1fr; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 .kv dt { color: var(--muted); font-size: 13px; } .kv dd { margin: 0; }
