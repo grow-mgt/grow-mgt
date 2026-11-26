@@ -28,7 +28,7 @@ function header(active, bizTabs) {
   const nav = [['list', bid === 0 ? '全体' : (rec ? '入金予定' : '請求書')], ['clients', '取引先'], ['products', '商品・単価'], ['payments', '入金照合'], ['report', '月次集計'], ['kanri', '年次集計'], ['catalog', '商品データ格納庫'], ['settings', '設定']]
     .filter(([k]) => !(k === 'products' && (rec || bid === 0)));
   let html = `<header class="top"><a class="brand" href="#list">GROW 請求・入金管理</a><nav>`;
-  for (const [k, label] of nav) html += `<a href="#${k}"${k === active ? ' class="on"' : ''}>${label}</a>`;
+  for (const [k, label] of nav) html += `<a href="#${k === 'products' ? 'matrix' : k}"${k === active ? ' class="on"' : ''}>${label}</a>`; // 「商品・単価」は、販売単価の画面から開く
   if (store.backend.kind === 'firestore') html += `<a href="#" class="logout" id="logoutLink" title="${h(store.backend.userEmail())}">ログアウト</a>`;
   html += `</nav></header>`;
   if (bizTabs) {
