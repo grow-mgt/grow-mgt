@@ -300,7 +300,7 @@ ${locked ? '<p class="muted small">※入金記録がある請求書です。金
         // シービーエムの明細から作った請求書を直したら、控えの明細（年間管理表）にも反映する
         const sy = id ? await syncLinesFromInvoice(oldItems, target) : null;
         const syMsg = sy && (sy.changed || sy.removed || sy.added || sy.missed)
-          ? '（年間管理表にも反映：' + [sy.changed ? '変更' + sy.changed + '行' : '', sy.removed ? '削除' + sy.removed + '行' : '', sy.added ? '追加' + sy.added + '行' : '', sy.missed ? '明細に見つからず反映できなかった行' + sy.missed + '行' : ''].filter(Boolean).join('・') + '）' : '';
+          ? '（年次集計にも反映：' + [sy.changed ? '変更' + sy.changed + '行' : '', sy.removed ? '削除' + sy.removed + '行' : '', sy.added ? '追加' + sy.added + '行' : '', sy.missed ? '明細に見つからず反映できなかった行' + sy.missed + '行' : ''].filter(Boolean).join('・') + '）' : '';
         flash('請求書を保存しました。' + syMsg + (learned ? `（${learned}件の単価をこの取引先の単価として保存）` : '') + (added ? `（新しい商品を${added}件登録）` : ''));
         go('invoice-' + target.id);
       });

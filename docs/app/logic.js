@@ -174,3 +174,33 @@ export function bizShares(inv) {
 
 // PDFの備考があって、まだ担当者が確かめていない請求書か
 export const needsCheck = (inv) => String(inv.check_note || '').trim() !== '' && !inv.checked_at;
+
+// 件名の「令和8年8月分」「8月分」から対象の月を読む（なければ発行月）
+const pad2 = (n) => String(n).padStart(2, '0');
+export function targetMonth(r) {
+  const t = String(r.title || '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)), issue = String(r.issue_date).slice(0, 7);
+  let m;
+  if ((m = /令和\s*(\d+)\s*年\s*(\d{1,2})\s*月分/u.exec(t))) return `${2018 + Number(m[1])}-${pad2(m[2])}`;
+  if ((m = /(20\d{2})\s*年\s*(\d{1,2})\s*月分/u.exec(t))) return `${m[1]}-${pad2(m[2])}`;
+  if ((m = /(\d{1,2})\s*月分/u.exec(t))) {
+    const y = Number(issue.slice(0, 4)), cand = `${y}-${pad2(m[1])}`;
+    return cand > issue ? `${y - 1}-${pad2(m[1])}` : cand;
+  }
+  return issue;
+}
+/** その事業の売上（税込）を、対象月（件名の「◯月分」）ごとに足す。下書きは入れない。{ '2026-04': 金額 } */
+export function salesByTargetMonth(bizId) {
+  const out = {};
+  for (const r of store.db.invoices) {
+    if (r.status === 'draft') continue;
+    const m = targetMonth(r);
+    for (const sh of bizShares(r)) if (sh.biz === bizId) out[m] = (out[m] || 0) + sh.total;
+  }
+  return out;
+}
+/** 粗利と利益率（小数1桁）。売上か仕入のどちらかがまだない月は null */
+export function profitOf(sales, cost) {
+  if (!sales || !cost) return { profit: null, rate: null };
+  const profit = sales - cost;
+  return { profit, rate: Math.round(profit / sales * 1000) / 10 };
+}

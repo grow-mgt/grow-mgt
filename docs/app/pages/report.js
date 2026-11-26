@@ -3,24 +3,11 @@ import { store } from '../store.js';
 import { state, go, setBiz } from '../nav.js';
 import { h, yen, nf, today } from '../util.js';
 import { showFlash } from '../ui.js';
-import { bizShares } from '../logic.js';
+import { bizShares, targetMonth, profitOf } from '../logic.js';
+import { buildKanri } from '../kanri-logic.js';
 
 const sel = { fy: 0, basis: 'target' };
 const pad = (n) => String(n).padStart(2, '0');
-const toHalfNum = (s) => String(s).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-
-// 件名の「令和8年8月分」「8月分」から対象の月を読む（なければ発行月）
-function targetMonth(r) {
-  const t = toHalfNum(r.title || ''), issue = String(r.issue_date).slice(0, 7);
-  let m;
-  if ((m = /令和\s*(\d+)\s*年\s*(\d{1,2})\s*月分/u.exec(t))) return `${2018 + Number(m[1])}-${pad(m[2])}`;
-  if ((m = /(20\d{2})\s*年\s*(\d{1,2})\s*月分/u.exec(t))) return `${m[1]}-${pad(m[2])}`;
-  if ((m = /(\d{1,2})\s*月分/u.exec(t))) {
-    const y = Number(issue.slice(0, 4)), cand = `${y}-${pad(m[1])}`;
-    return cand > issue ? `${y - 1}-${pad(m[1])}` : cand;
-  }
-  return issue;
-}
 
 export function reportPage() {
   const td = today();
@@ -71,6 +58,17 @@ export function reportPage() {
   const clients = Object.entries(byClient).map(([name, row]) => [name, months.map((m) => row[m] || 0)]).sort((a, b) => sum(b[1]) - sum(a[1]));
   const cells = (row) => row.map((v) => `<td class="r${v ? '' : ' zero'}">${v ? nf(v) : '-'}</td>`).join('');
   const mainWord = basis === 'paid' ? '入金額' : '売上（税込）';
+  // CBMの仕入（シービーエムからの請求・税込）と粗利。対象月で集計しているときだけ出す
+  const showProfit = basis === 'target' && bizList.some((b) => b.id === 1);
+  const cost = showProfit ? buildKanri(fy).totalTax : months.map(() => 0);
+  const cbmSales = rowOf(sales, 1);
+  const prof = months.map((_, i) => profitOf(cbmSales[i], cost[i]));
+  const profYear = profitOf(sum(cbmSales.filter((_, i) => cost[i] > 0)), sum(cost.filter((_, i) => cbmSales[i] > 0)));
+  const pct = (v) => (v == null ? '-' : v.toFixed(1) + '%');
+  const profitRows = () => `
+      <tr class="r-sub"><td></td><td class="small muted">仕入（税込）</td>${cells(cost)}<td class="r b">${nf(sum(cost))}</td></tr>
+      <tr class="r-sub"><td></td><td class="small muted">粗利</td>${prof.map((x) => `<td class="r${x.profit == null ? ' zero' : (x.profit < 0 ? ' warn' : '')}">${x.profit == null ? '-' : nf(x.profit)}</td>`).join('')}<td class="r b">${profYear.profit == null ? '-' : nf(profYear.profit)}</td></tr>
+      <tr class="r-sub"><td></td><td class="small muted">利益率</td>${prof.map((x) => `<td class="r${x.rate == null ? ' zero' : ''}">${pct(x.rate)}</td>`).join('')}<td class="r b">${pct(profYear.rate)}</td></tr>`;
 
   const html = `
 <div class="head-row">
@@ -109,12 +107,14 @@ export function reportPage() {
         <td>${i === 0 ? `<a href="#report" data-rbiz="${b.id}">${h(b.name)}</a>` : ''}</td>
         <td class="small muted">${ln}</td>${cells(row)}<td class="r b">${nf(sum(row))}</td>
       </tr>`).join('')
+      + (showProfit && b.id === 1 ? profitRows() : '')
       + (basis !== 'paid' ? `<tr class="r-sub"><td></td><td class="small muted">いまの未入金</td><td colspan="12"></td><td class="r ${unpaidNow[b.id] ? 'warn' : ''}">${nf(unpaidNow[b.id] || 0)}</td></tr>` : '');
   }).join('')}
   ${bizList.length > 1 ? `<tr class="r-total"><td>GROW合計</td><td class="small">${mainWord}</td>${tot.map((v) => `<td class="r">${v ? nf(v) : '-'}</td>`).join('')}<td class="r">${nf(sum(tot))}</td></tr>` : ''}
   </tbody>
 </table>
 </div>
+${showProfit ? '<p class="small muted mt">※CBMの「仕入」は、シービーエムからの請求（年次集計と同じ金額・税込）です。「粗利」は 売上（税込）− 仕入（税込）、「利益率」は 粗利 ÷ 売上 です。売上か仕入のどちらかがまだない月は「-」にして、年度合計の粗利にも入れていません。</p>' : ''}
 ${noBreak && basis !== 'paid' ? `<p class="small muted mt">※invoyから取り込んだ請求書${noBreak}件は明細（消費税の内訳）がないので、「売上（税抜）」にも税込の金額で入っています。</p>` : ''}
 
 ${bid && clients.length ? `
@@ -134,6 +134,7 @@ ${bid && clients.length ? `
       if (basis !== 'paid') {
         const e = rowOf(ex, b.id); out.push([b.name, '売上（税抜）', ...e, sum(e)]);
         const p = rowOf(paid, b.id); out.push([b.name, '入金額', ...p, sum(p)]);
+        if (showProfit && b.id === 1) { out.push([b.name, '仕入（税込）', ...cost, sum(cost)]); out.push([b.name, '粗利', ...prof.map((x) => (x.profit == null ? '' : x.profit)), profYear.profit == null ? '' : profYear.profit]); out.push([b.name, '利益率（%）', ...prof.map((x) => (x.rate == null ? '' : x.rate.toFixed(1))), profYear.rate == null ? '' : profYear.rate.toFixed(1)]); }
       }
     }
     for (const [name, row] of clients) out.push([store.bizOf(bid).name + '：' + name, mainWord, ...row, sum(row)]);

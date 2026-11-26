@@ -3,6 +3,7 @@
 //  - 明細のない月：手で入れた金額（スプレッドシートから貼り付けて取り込める）
 import { store } from './store.js';
 import { normName, similarPct, storeMap, productAlias, matchStore, matchProduct } from './cbm-logic.js';
+import { salesByTargetMonth, profitOf } from './logic.js';
 
 export const DEFAULT_GROUP = 'その他グループ薬局';
 const json = (key, fb) => { try { const v = JSON.parse(store.setting(key) || ''); return v == null ? fb : v; } catch (e) { return fb; } };
@@ -65,16 +66,29 @@ export function buildKanri(fy) {
   return { fy, months, groups, autoMonths, noRows, total: sumCols(all), totalTax: sumTax(all), pending, rowNames: kanriRows().map((r) => r.name) };
 }
 
-/** 書き出す表（スプレッドシートの年間管理表と同じ並び） */
+/** 年次集計の下に出す、売上・仕入・粗利・利益率（月ごと・税込）。売上か仕入のない月は、粗利と利益率を出さない */
+export function kanriProfit(k) {
+  const sales = salesByTargetMonth(1);
+  const s = k.months.map((ym) => sales[ym] || 0), c = k.totalTax;
+  const per = k.months.map((_, i) => profitOf(s[i], c[i]));
+  const add = (a) => a.reduce((x, y) => x + y, 0);
+  const year = profitOf(add(s.filter((_, i) => c[i] > 0)), add(c.filter((_, i) => s[i] > 0)));
+  return { sales: s, cost: c, per, year, salesYear: add(s), costYear: add(c) };
+}
+
+/** 書き出す表（画面と同じ並び・税込） */
 export function kanriTable(k) {
   const s = (a) => a.reduce((x, y) => x + y, 0);
-  const pair = (vals, taxes) => vals.flatMap((v, i) => [v, taxes[i]]);
-  const out = [['卸先グループ', '卸先名', ...k.months.flatMap((ym) => [ymLabel(ym) + ' 税抜', ymLabel(ym) + ' 税込']), '年間合計 税抜', '年間合計 税込']];
+  const out = [['卸先名', ...k.months.map((ym) => ymLabel(ym)), '年間合計']];
   for (const g of k.groups) {
-    for (const r of g.rows) { const t = r.vals.map(inTax); out.push([g.name, r.name, ...pair(r.vals, t), s(r.vals), s(t)]); }
-    out.push([g.name + ' 小計', '', ...pair(g.sub, g.subTax), s(g.sub), s(g.subTax)]);
+    for (const r of g.rows) { const t = r.vals.map(inTax); out.push([r.name, ...t, s(t)]); }
+    out.push([g.name + ' 小計', ...g.subTax, s(g.subTax)]);
   }
-  out.push(['総合計', '', ...pair(k.total, k.totalTax), s(k.total), s(k.totalTax)]);
+  out.push(['仕入 合計（税込）', ...k.totalTax, s(k.totalTax)]);
+  const p = kanriProfit(k);
+  out.push(['売上（税込）', ...p.sales, p.salesYear]);
+  out.push(['粗利', ...p.per.map((x) => (x.profit == null ? '' : x.profit)), p.year.profit == null ? '' : p.year.profit]);
+  out.push(['利益率（%）', ...p.per.map((x) => (x.rate == null ? '' : x.rate.toFixed(1))), p.year.rate == null ? '' : p.year.rate.toFixed(1)]);
   return out;
 }
 

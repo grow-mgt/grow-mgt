@@ -95,7 +95,7 @@ exports.sendMail = onCall(
     if (!me) throw new HttpsError("permission-denied", "この差し出し人は、設定の担当者に登録されていません。");
 
     const company = String(values.company || "").trim();
-    const senderName = [company, String(me.name || "").trim()].filter(Boolean).join(" ");
+    const senderName = company; // 差出人の表示は会社名だけにする（担当者の名前は出さない）
 
     const payload = {
       sender: senderName ? { email: me.email, name: senderName } : { email: me.email },
