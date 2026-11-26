@@ -56,7 +56,7 @@
     var files = ['./', 'assets/style.css', 'app/app.js'].concat([].map.call(document.querySelectorAll('link[rel=modulepreload]'), function (l) { return l.getAttribute('href'); }).filter(function (h) { return h.indexOf('http') !== 0; }));
     Promise.all(files.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); })).then(function () {
       try { localStorage.setItem('grow-mgt-version', v.v); } catch (e) {}
-      if (had !== null) location.reload(); // 初めて開いたときは、読み込み直さない
+      location.reload(); // 新しい部品で開き直す（版を覚えたあとなので、くり返さない）
     });
   }).catch(function () {});
 })();
