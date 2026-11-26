@@ -1,7 +1,8 @@
 // 商品・単価（今までの products.php と同じ画面）
 import { store } from '../store.js';
-import { once, go } from '../nav.js';
+import { go } from '../nav.js';
 import { h, nf, toIntOrNull, nowUtc } from '../util.js';
+import { priceInfo } from '../logic.js';
 import { flash, confirmBox } from '../ui.js';
 
 const RATES = [[10, '10%'], [8, '8%'], [0, '対象外']];
@@ -9,8 +10,8 @@ const head = (view) => `
 <div class="head-row">
   <h1>商品・単価</h1>
   <div class="btns">
-    <a class="chip${view === 'list' ? ' on' : ''}" href="#products">商品の一覧</a>
-    <a class="chip${view === 'matrix' ? ' on' : ''}" href="#matrix">取引先ごとの単価表</a>
+    <a class="chip${view === 'matrix' ? ' on' : ''}" href="#matrix">販売単価</a>
+    <a class="chip${view === 'list' ? ' on' : ''}" href="#products">仕入単価</a>
   </div>
 </div>`;
 
@@ -19,7 +20,7 @@ export function productsPage() {
   const products = [...store.db.products].sort((a, b) => (b.active - a.active) || a.name.localeCompare(b.name, 'ja'));
   const special = (p) => store.db.clientPrices.filter((x) => x.product_id === p.id).length;
   const html = head('list') + `
-<p class="muted">請求書の明細で商品名を選ぶと、<b>その取引先の単価 → その取引先のルール（原価／原価＋◯円）→ 標準単価</b>の順で自動で入ります。取引先ごとの単価は「取引先ごとの単価表」か、各取引先の画面で入れます。</p>
+<p class="muted">請求書の明細で商品名を選ぶと、<b>その取引先の単価 → その取引先のルール（原価／原価＋◯円）→ 標準単価</b>の順で自動で入ります。取引先ごとの単価は「販売単価」か、各取引先の画面で入れます。</p>
 <form id="prodForm">
   <div class="table-wrap">
   <table class="list edit">
@@ -56,7 +57,7 @@ export function productsPage() {
 </form>`;
 
   return {
-    title: '商品・単価', active: 'products', html,
+    title: '仕入単価 | 商品・単価', active: 'products', html,
     mount(root) {
       const form = root.querySelector('#prodForm');
       const read = (tr) => ({ name: tr.querySelector('.pname').value.trim(), unit: tr.querySelector('.punit').value.trim(),
@@ -103,51 +104,69 @@ export function productsPage() {
   };
 }
 
-/* ---------- 取引先ごとの単価表 ---------- */
+/* ---------- 販売単価（取引先を選ぶと、商品と単価が縦に並ぶ） ---------- */
+const pick = { client: 0, onlySet: false };
 export function matrixPage() {
-  const g = once.matrixGroup, all = once.matrixAll;
-  const groups = [...new Set(store.db.clients.map((c) => c.group_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja'));
-  const clients = store.db.clients.filter((c) => g === '' || c.group_name === g)
-    .sort((a, b) => String(a.group_name || '').localeCompare(String(b.group_name || ''), 'ja') || a.name.localeCompare(b.name, 'ja'));
-  const cp = new Map(store.db.clientPrices.map((x) => [x.client_id + '_' + x.product_id, x]));
-  const used = new Set(store.db.clientPrices.map((x) => x.product_id));
-  let active = store.db.products.filter((p) => p.active === 1).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-  // 単価が入っている商品だけ列に出す（多すぎると見づらいため）
-  if (!all) active = active.filter((p) => used.has(p.id) || p.price != null);
+  const clients = [...store.db.clients].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  if (!clients.some((c) => c.id === pick.client)) pick.client = 0;
+  const c = pick.client ? store.client(pick.client) : null;
+  const mine = new Map(store.db.clientPrices.filter((x) => c && x.client_id === c.id).map((x) => [x.product_id, x]));
+  let products = store.db.products.filter((p) => p.active === 1 || mine.has(p.id))
+    .sort((a, b) => (mine.has(b.id) - mine.has(a.id)) || a.name.localeCompare(b.name, 'ja'));
+  if (pick.onlySet) products = products.filter((p) => mine.has(p.id));
+  const RULE = { cost_all: 'すべて原価（仕入単価）で請求する取引先です。下に単価を入れても、原価が優先されます。', cost: '単価を入れていない商品は、原価（仕入単価）で請求します。', cost_plus: '単価を入れていない商品は、原価＋' + nf(c ? Number(c.price_rule_amount) || 0 : 0) + '円で請求します。' };
+  const label = (x) => x.name + (x.corp_name ? '（' + x.corp_name + '）' : '');
 
   const html = head('matrix') + `
-<p class="muted">緑の欄はアプリで入れた単価、空欄は「価格表にない商品」のルールか標準単価を使います。${!all ? '<a href="#matrix" id="showAll">すべての商品を表示</a>' : ''}</p>
-${groups.length ? `<div class="filters"><a class="chip${g === '' ? ' on' : ''}" href="#matrix" data-g="">すべて</a>${groups.map((gr) => `<a class="chip${g === gr ? ' on' : ''}" href="#matrix" data-g="${h(gr)}">${h(gr)}</a>`).join('')}</div>` : ''}
-${!clients.length || !active.length ? '<div class="empty">取引先と商品を登録すると、ここで取引先ごとの単価を一覧で入れられます。</div>' : `
+<p class="muted">取引先を選ぶと、その取引先に請求するときの単価が、商品ごとに縦に並びます。金額はすべて税抜です。</p>
+<div class="card form">
+  <label style="max-width:520px">取引先
+    <select id="pickClient"><option value="0">取引先を選んでください…</option>${clients.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>${h(label(x))}</option>`).join('')}</select>
+  </label>
+  ${c ? `<p class="small muted" style="margin:8px 0 0">単価を入れた商品：${mine.size}件${c.price_rule && RULE[c.price_rule] ? '　／　' + RULE[c.price_rule] : ''}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
+</div>
+${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
 <form id="matrixForm">
-  <div class="table-wrap matrix-wrap">
-  <table class="list matrix">
-    <thead><tr><th class="sticky">取引先</th>${active.map((p) => `<th class="r">${h(p.name)}<br><span class="muted small">標準 ${p.price != null ? nf(p.price) : '未設定'}</span></th>`).join('')}</tr></thead>
+  <p class="small" style="margin:14px 0 8px"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="onlySet" style="width:auto;margin:0"${pick.onlySet ? ' checked' : ''}> 単価を入れた商品だけ表示</label></p>
+  <div class="table-wrap">
+  <table class="list edit">
+    <thead><tr><th>商品名</th><th class="r">仕入単価</th><th class="w-price r">販売単価（この取引先）</th><th class="r">実際に請求する単価</th><th>その理由</th><th class="r">粗利</th><th class="r">粗利率</th></tr></thead>
     <tbody>
-    ${clients.map((c) => `<tr><th class="sticky">${h(c.name)}</th>${active.map((p) => {
-      const m = cp.get(c.id + '_' + p.id); const isS = false;
-      return `<td><input data-c="${c.id}" data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${isS ? ' sheet' : (m ? ' set' : '')}"${isS ? ' readonly title="価格表スプレッドシートの単価"' : ''} inputmode="numeric" placeholder="${p.price != null ? nf(p.price) : ''}"></td>`;
-    }).join('')}</tr>`).join('')}
+    ${products.map((p) => {
+      const m = mine.get(p.id), info = priceInfo(c.id, p.id);
+      const gp = info.price != null && p.cost != null ? info.price - Number(p.cost) : null;
+      const rate = gp != null && info.price ? (Math.round(gp / info.price * 1000) / 10).toFixed(1) + '%' : '';
+      return `<tr class="${p.active ? '' : 'off'}">
+        <td>${h(p.name)}</td>
+        <td class="r">${p.cost != null ? nf(p.cost) : '<span class="muted">-</span>'}</td>
+        <td><input data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${m ? ' set' : ''}" inputmode="numeric" placeholder="未入力"></td>
+        <td class="r b">${info.price != null ? nf(info.price) : '<span class="badge warn">未設定</span>'}</td>
+        <td class="small muted">${h(info.from || '')}</td>
+        <td class="r">${gp != null ? nf(gp) : ''}</td>
+        <td class="r small">${rate}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" class="muted">表示する商品がありません。</td></tr>'}
     </tbody>
   </table>
   </div>
+  <p class="small muted">「販売単価」が空欄の商品は、取引先のルール（原価／原価＋◯円）か、商品の標準単価で請求します。どれもない商品は「未設定」になり、請求書を作るときに単価を入れる必要があります。</p>
   <div class="actions"><button class="btn primary">保存</button></div>
 </form>`}`;
 
   return {
-    title: '商品・単価', active: 'products', html,
+    title: '販売単価 | 商品・単価', active: 'products', html,
     mount(root) {
-      root.querySelectorAll('[data-g]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); once.matrixGroup = a.dataset.g; go('matrix'); }));
-      const sa = root.querySelector('#showAll'); if (sa) sa.addEventListener('click', (e) => { e.preventDefault(); once.matrixAll = true; go('matrix'); });
+      root.querySelector('#pickClient').addEventListener('change', (e) => { pick.client = Number(e.target.value); go('matrix'); });
+      const os = root.querySelector('#onlySet'); if (os) os.addEventListener('change', () => { pick.onlySet = os.checked; go('matrix'); });
       const form = root.querySelector('#matrixForm'); if (!form) return;
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        for (const inp of form.querySelectorAll('input[data-c]')) {
-          const cid = Number(inp.dataset.c), pid = Number(inp.dataset.p), m = cp.get(cid + '_' + pid);
-          const val = toIntOrNull(inp.value);
-          if ((m ? m.price : null) !== val) await store.setClientPrice(cid, pid, val);
+        let n = 0;
+        for (const inp of form.querySelectorAll('input[data-p]')) {
+          const pid = Number(inp.dataset.p), m = mine.get(pid), val = toIntOrNull(inp.value);
+          if ((m ? Number(m.price) : null) !== val) { await store.setClientPrice(c.id, pid, val); n++; }
         }
-        flash('顧客別の単価を保存しました。'); go('matrix');
+        flash(n ? `「${c.name}」の販売単価を保存しました（${n}件）。` : '変更はありません。'); go('matrix');
       });
     },
   };
