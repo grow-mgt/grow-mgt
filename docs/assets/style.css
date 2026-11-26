@@ -373,6 +373,8 @@ input.warn-input { border-color: #f0a3a3; background: #fff; }
 .biz-form { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 14px 12px; }
 .biz-form.new { border-style: dashed; }
 .biz-form label { margin-bottom: 8px; }
+/* 事業の欄は、広い画面では1列（1行）に並べる */
+@media (min-width: 901px) { .biz-grid { grid-template-columns: 1.1fr 1fr 2.4fr 1fr; align-items: start; } }
 .kv { margin: 0 0 14px; display: grid; gap: 8px; }
 .kv div { display: grid; grid-template-columns: 120px 1fr; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 .kv dt { color: var(--muted); font-size: 13px; } .kv dd { margin: 0; }

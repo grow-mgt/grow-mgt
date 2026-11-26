@@ -28,13 +28,13 @@ export function staffList() {
 
 const bizForm = (b) => `
   <form class="biz-form${b ? '' : ' new'}" data-biz-form="${b ? b.id : 0}">
-    <div class="grid4">
+    <div class="grid4 biz-grid">
       <label>${b ? '事業の名前' : '新しい事業の名前'}<input name="biz_name" value="${b ? h(b.name) : ''}"${b ? '' : ' placeholder="例：〇〇事業"'}></label>
       <label>使い方<select name="biz_kind">
         <option value="invoice"${!b || b.kind !== 'reconcile' ? ' selected' : ''}>請求書を発行する</option>
         <option value="reconcile"${b && b.kind === 'reconcile' ? ' selected' : ''}>入金の消し込みだけ</option>
       </select></label>
-      <label class="span2">振込先${b ? '（この事業の口座）' : ''}<input name="biz_bank" value="${b ? h(b.bank) : ''}"${b ? ' placeholder="〇〇銀行 〇〇支店 普通 0000000 カ）グロウ"' : ''}></label>
+      <label>振込先${b ? '（この事業の口座）' : ''}<input name="biz_bank" value="${b ? h(b.bank) : ''}"${b ? ' placeholder="〇〇銀行 〇〇支店 普通 0000000 カ）グロウ"' : ''}></label>
       ${b ? `<label>毎月の入金予定の期日<select name="biz_due_day">
         <option value="0"${Number(b.due_day) === 0 ? ' selected' : ''}>月末</option>
         ${[...Array(28).keys()].map((i) => `<option value="${i + 1}"${Number(b.due_day) === i + 1 ? ' selected' : ''}>${i + 1}日</option>`).join('')}
