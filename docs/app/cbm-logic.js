@@ -211,8 +211,10 @@ export function plan(lines, overrides = {}) {
     const pid = out.items.get(l.name).product_id;
     const client = store.client(cid);
     let info;
-    // グループの親会社（すべて仕入単価）：販売単価を手で入れた商品はその金額、ほかは明細の単価（仕入単価）
-    const hand = pid ? store.db.clientPrices.find((x) => x.client_id === cid && x.product_id === pid) : null;
+    // グループの親会社（すべて仕入単価）：販売単価を仕入単価とちがう金額に手で変えた商品はその金額、ほかは明細の単価（シービーエムの請求のまま）
+    const cpRow = pid ? store.db.clientPrices.find((x) => x.client_id === cid && x.product_id === pid) : null;
+    const prodCost = pid && store.product(pid) && store.product(pid).cost != null ? Number(store.product(pid).cost) : null;
+    const hand = cpRow && Number(cpRow.price) !== prodCost ? cpRow : null;
     if (client.price_rule === 'cost_all' && !hand && l.cost != null) info = { price: Number(l.cost), from: '仕入単価（明細の単価）' };
     else info = pid ? priceInfo(cid, pid) : { price: null, from: '' };
     // 請求書PDFの備考に「お客様価格は￥…」とある行は、その価格を使う
