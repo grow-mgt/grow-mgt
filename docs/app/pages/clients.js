@@ -41,18 +41,17 @@ export function clientsPage() {
 ${!rows.length ? '<div class="empty">取引先はまだありません。</div>' : `
 <div class="table-wrap">
 <table class="list">
-  <thead><tr><th>取引先名</th>${!bid ? '<th>事業</th>' : ''}<th>グループ</th><th>ご担当者</th><th>メール</th><th>振込名義</th><th class="r">請求書</th><th class="r">未入金</th></tr></thead>
+  <thead><tr><th>取引先名</th>${!bid ? '<th>事業</th>' : ''}${bid ? '<th>グループ</th>' : ''}<th>ご担当者</th><th>メール</th><th>振込名義</th>${bid ? '<th class="r">請求書</th><th class="r">未入金</th>' : ''}</tr></thead>
   <tbody id="clientRows">
   ${rows.map((r) => { const s = stat(r); return `
     <tr data-id="${r.id}">
       <td><a href="#client-${r.id}">${h(r.name)}</a> <span class="muted small">${h(r.honorific)}</span>${r.corp_name ? `<br><span class="muted small">${h(r.corp_name)}</span>` : ''}</td>
       ${!bid ? `<td class="small muted">${h(store.bizOf(r.business_id).name)}</td>` : ''}
-      <td class="small muted">${h(r.group_name)}</td>
+      ${bid ? `<td class="small muted">${h(r.group_name)}</td>` : ''}
       <td>${h(r.contact)}</td>
       <td class="small">${h(r.email)}</td>
       <td class="small mono">${h(r.payer_kana)}</td>
-      <td class="r">${s.cnt}</td>
-      <td class="r">${s.unpaid ? yen(s.unpaid) : ''}</td>
+      ${bid ? `<td class="r">${s.cnt}</td><td class="r">${s.unpaid ? yen(s.unpaid) : ''}</td>` : ''}
     </tr>`; }).join('')}
   </tbody>
 </table>
