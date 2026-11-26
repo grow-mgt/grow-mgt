@@ -114,10 +114,10 @@ export function priceInfo(clientId, productId) {
   const cp = store.db.clientPrices.find((x) => x.client_id === Number(clientId) && x.product_id === Number(productId));
   const c = store.client(clientId) || { price_rule: '' };
   const prod = store.product(productId);
-  // 「すべて仕入単価」の取引先（グループの親会社）は、いつも仕入単価で請求する
-  if (c.price_rule === 'cost_all') return prod && prod.cost != null ? { price: Number(prod.cost), from: '仕入単価' } : { price: null, from: '' };
-  // それ以外は、「販売単価」に入れた金額がそのまま請求する金額
+  // 「販売単価」に入れた金額があれば、それがそのまま請求する金額
   if (cp) return { price: Number(cp.price), from: '販売単価' };
+  // 「すべて仕入単価」の取引先（グループの親会社）は、販売単価を入れていない商品を仕入単価で請求する
+  if (c.price_rule === 'cost_all') return prod && prod.cost != null ? { price: Number(prod.cost), from: '仕入単価' } : { price: null, from: '' };
   if (prod && prod.price != null) return { price: Number(prod.price), from: '標準単価' };
   return { price: null, from: '' };
 }

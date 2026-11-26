@@ -211,7 +211,9 @@ export function plan(lines, overrides = {}) {
     const pid = out.items.get(l.name).product_id;
     const client = store.client(cid);
     let info;
-    if (client.price_rule === 'cost_all' && l.cost != null) info = { price: Number(l.cost), from: '原価（明細の単価）' };
+    // グループの親会社（すべて仕入単価）：販売単価を手で入れた商品はその金額、ほかは明細の単価（仕入単価）
+    const hand = pid ? store.db.clientPrices.find((x) => x.client_id === cid && x.product_id === pid) : null;
+    if (client.price_rule === 'cost_all' && !hand && l.cost != null) info = { price: Number(l.cost), from: '仕入単価（明細の単価）' };
     else info = pid ? priceInfo(cid, pid) : { price: null, from: '' };
     // 請求書PDFの備考に「お客様価格は￥…」とある行は、その価格を使う
     if (l.cust_price != null) info = { price: Number(l.cust_price), from: 'PDFの備考（お客様価格）' };

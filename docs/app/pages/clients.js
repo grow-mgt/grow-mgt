@@ -156,7 +156,7 @@ export function clientEditPage(arg) {
     <span class="rule-row">
       <select name="price_rule">
         <option value=""${c.price_rule !== 'cost_all' ? ' selected' : ''}>販売単価で請求する（ふつうの取引先）</option>
-        <option value="cost_all"${c.price_rule === 'cost_all' ? ' selected' : ''}>すべて仕入単価で請求する（グループの親会社）</option>
+        <option value="cost_all"${c.price_rule === 'cost_all' ? ' selected' : ''}>仕入単価で請求する（グループの親会社。販売単価を入れた商品だけ、その金額）</option>
       </select>
       <input type="hidden" name="price_rule_amount" value="0">
     </span>`}

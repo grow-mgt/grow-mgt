@@ -125,7 +125,7 @@ export function matrixPage() {
   <label style="max-width:520px">取引先
     <select id="pickClient"><option value="0">取引先を選んでください…</option>${clients.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>${h(label(x))}</option>`).join('')}</select>
   </label>
-  ${c ? `<p class="small muted" style="margin:8px 0 0">${costAll ? '<b>グループの親会社なので、すべて仕入単価で請求します。</b>販売単価は入れられません。' : '販売単価を入れた商品：' + mine.size + '件'}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
+  ${c ? `<p class="small muted" style="margin:8px 0 0">${costAll ? '<b>グループの親会社なので、仕入単価で請求します。</b>販売単価を入れた商品だけ、その金額で請求します（入れた商品：' + mine.size + '件）。' : '販売単価を入れた商品：' + mine.size + '件'}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
 </div>
 ${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
 <form id="matrixForm">
@@ -141,7 +141,7 @@ ${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
       return `<tr class="${p.active ? '' : 'off'}">
         <td>${h(p.name)}</td>
         <td class="r">${p.cost != null ? nf(p.cost) : '<span class="muted">-</span>'}</td>
-        <td>${costAll ? `<input value="${p.cost != null ? h(p.cost) : ''}" class="r locked" readonly title="仕入単価で請求します">` : `<input data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${m ? ' set' : ''}" inputmode="numeric" placeholder="未設定">`}</td>
+        <td><input data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${m ? ' set' : ''}" inputmode="numeric" placeholder="${costAll ? (p.cost != null ? '仕入単価 ' + nf(p.cost) : '未設定') : '未設定'}"></td>
         <td class="r">${gp != null ? nf(gp) : ''}</td>
         <td class="r small">${rate}</td>
       </tr>`;
@@ -150,7 +150,7 @@ ${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
   </table>
   </div>
   <p class="small muted">「販売単価」に入れた金額が、そのまま請求する単価になります。空欄（未設定）の商品は、請求書を作るときに単価を入れる必要があります。</p>
-  ${costAll ? '' : '<div class="actions"><button class="btn primary">保存</button></div>'}
+  <div class="actions"><button class="btn primary">保存</button></div>
 </form>`}`;
 
   return {
