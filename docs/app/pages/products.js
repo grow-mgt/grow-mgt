@@ -117,17 +117,15 @@ export function matrixPage() {
     .sort((a, b) => (mine.has(b.id) - mine.has(a.id)) || a.name.localeCompare(b.name, 'ja'));
   if (pick.onlySet) products = products.filter((p) => mine.has(p.id));
   const costAll = !!c && c.price_rule === 'cost_all';
-  const label = (x) => x.name + (x.corp_name ? '（' + x.corp_name + '）' : '');
 
   const html = head('matrix') + `
 <p class="muted">取引先を選ぶと、その取引先に請求する単価（販売単価）が、商品ごとに縦に並びます。金額はすべて税抜です。${bid ? `選べるのは「${h(store.bizOf(bid).name)}」の取引先だけです。` : ''}</p>
 <div class="card form">
-  <label style="max-width:520px">取引先
-    <select id="pickClient"><option value="0">取引先を選んでください…</option>${clients.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>${h(label(x))}</option>`).join('')}</select>
-  </label>
-  ${c ? `<p class="small muted" style="margin:8px 0 0">${costAll ? '<b>グループの親会社なので、仕入単価で請求します。</b>販売単価を入れた商品だけ、その金額で請求します（入れた商品：' + mine.size + '件）。' : '販売単価を入れた商品：' + mine.size + '件'}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
+  <div class="small muted" style="margin-bottom:6px">取引先を選んでください</div>
+  <div class="filters" style="margin:0" id="pickClient">${clients.map((x) => `<a href="#matrix" class="chip${c && x.id === c.id ? ' on' : ''}" data-pick="${x.id}" title="${h(x.corp_name || '')}">${h(x.name)}</a>`).join('') || '<span class="muted">この事業の取引先がありません。</span>'}</div>
+  ${c ? `<p class="small muted" style="margin:12px 0 0"><b style="color:var(--ink)">${h(c.name)}${c.corp_name ? '（' + h(c.corp_name) + '）' : ''}</b>　${costAll ? '<b>グループの親会社なので、仕入単価で請求します。</b>販売単価を入れた商品だけ、その金額で請求します（入れた商品：' + mine.size + '件）。' : '販売単価を入れた商品：' + mine.size + '件'}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
 </div>
-${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
+${!c ? '<div class="empty">上のボタンから取引先を選んでください。</div>' : `
 <form id="matrixForm">
   <p class="small" style="margin:14px 0 8px"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="onlySet" style="width:auto;margin:0"${pick.onlySet ? ' checked' : ''}> 単価を入れた商品だけ表示</label></p>
   <div class="table-wrap">
@@ -141,7 +139,7 @@ ${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
       return `<tr class="${p.active ? '' : 'off'}">
         <td>${h(p.name)}</td>
         <td class="r">${p.cost != null ? nf(p.cost) : '<span class="muted">-</span>'}</td>
-        <td><input data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${m ? ' set' : ''}" inputmode="numeric" placeholder="${costAll ? (p.cost != null ? '仕入単価 ' + nf(p.cost) : '未設定') : '未設定'}"></td>
+        <td><input data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${m ? ' set' : ''}" inputmode="numeric" placeholder="${costAll ? (p.cost != null ? nf(p.cost) : '未設定') : '未設定'}"></td>
         <td class="r">${gp != null ? nf(gp) : ''}</td>
         <td class="r small">${rate}</td>
       </tr>`;
@@ -156,7 +154,7 @@ ${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
   return {
     title: '販売単価 | 商品・単価', active: 'products', html,
     mount(root) {
-      root.querySelector('#pickClient').addEventListener('change', (e) => { pick.client = Number(e.target.value); go('matrix'); });
+      root.querySelectorAll('[data-pick]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); pick.client = Number(a.dataset.pick); go('matrix'); }));
       const os = root.querySelector('#onlySet'); if (os) os.addEventListener('change', () => { pick.onlySet = os.checked; go('matrix'); });
       const form = root.querySelector('#matrixForm'); if (!form) return;
       form.addEventListener('submit', async (e) => {
