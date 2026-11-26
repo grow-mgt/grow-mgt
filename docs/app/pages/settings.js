@@ -35,10 +35,6 @@ const bizForm = (b) => `
         <option value="reconcile"${b && b.kind === 'reconcile' ? ' selected' : ''}>入金の消し込みだけ</option>
       </select></label>
       <label>振込先${b ? '（この事業の口座）' : ''}<input name="biz_bank" value="${b ? h(b.bank) : ''}"${b ? ' placeholder="〇〇銀行 〇〇支店 普通 0000000 カ）グロウ"' : ''}></label>
-      ${b ? `<label>毎月の入金予定の期日<select name="biz_due_day">
-        <option value="0"${Number(b.due_day) === 0 ? ' selected' : ''}>月末</option>
-        ${[...Array(28).keys()].map((i) => `<option value="${i + 1}"${Number(b.due_day) === i + 1 ? ' selected' : ''}>${i + 1}日</option>`).join('')}
-      </select><small>入金消込の事業で使います</small></label>` : ''}
     </div>
     ${b ? '' : '<button class="btn small">事業を追加</button>'}
   </form>`;
@@ -234,8 +230,7 @@ ${store.backend.kind !== 'firestore' ? `
         const kind = f.biz_kind.value === 'reconcile' ? 'reconcile' : 'invoice', bank = f.biz_bank.value.trim();
         if (name === '') { showFlash('事業の名前を入れてください。', 'err'); return; }
         if (id) {
-          const day = Math.max(0, Math.min(31, Number(f.biz_due_day.value) || 0));
-          await store.saveBusiness(Object.assign(store.bizOf(id), { name, kind, bank, due_day: day }));
+          await store.saveBusiness(Object.assign(store.bizOf(id), { name, kind, bank }));
           flash('「' + name + '」を保存しました。');
         } else {
           const all = store.db.businesses;
@@ -298,7 +293,7 @@ ${store.backend.kind !== 'firestore' ? `
         for (const bf of root.querySelectorAll('[data-biz-form]:not(.new)')) {
           const b = store.bizOf(Number(bf.dataset.bizForm)), name = bf.biz_name.value.trim();
           if (name === '') { showFlash('事業の名前を入れてください。', 'err'); return; }
-          const nv = { name, kind: bf.biz_kind.value === 'reconcile' ? 'reconcile' : 'invoice', bank: bf.biz_bank.value.trim(), due_day: Math.max(0, Math.min(31, Number(bf.biz_due_day.value) || 0)) };
+          const nv = { name, kind: bf.biz_kind.value === 'reconcile' ? 'reconcile' : 'invoice', bank: bf.biz_bank.value.trim() };
           if (Object.keys(nv).some((k) => String(b[k] ?? '') !== String(nv[k]))) bizChanges.push({ ...b, ...nv });
         }
         for (const b of bizChanges) await store.saveBusiness(b);
