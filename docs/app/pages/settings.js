@@ -59,7 +59,8 @@ export function settingsPage() {
   </div>
 </section>
 
-<form class="card form" id="mainForm">
+<form class="form" id="mainForm">
+<section class="card">
   <h2>請求書に載せる発行元の情報（GROW共通）</h2>
   <div class="grid2">
     <label>会社名・屋号<input name="company" value="${h(s.company)}"></label>
@@ -82,7 +83,9 @@ export function settingsPage() {
       <input type="hidden" name="seal_image" id="sealData" value="${h(s.seal_image)}">
     </div>
   </div>
+</section>
 
+<section class="card" id="mailSet">
   <h2>メール送信</h2>
   <p class="small muted">メールは、担当者のアドレスを差し出し人にして送ります。お客様の返信も、その担当者に届きます。送るときに担当者を選びます。</p>
   <div class="table-wrap">
@@ -97,7 +100,9 @@ export function settingsPage() {
     <label class="span2">メールの本文<textarea name="mail_body" rows="14" class="mono">${h(s.mail_body)}</textarea>
       <small>差し込める項目：{client} 宛名（法人名＋御中）、{item} 件名から月を外したもの（例：薬局消耗品）、{contact} ご担当者、{number} 請求書番号、{title} 件名、{amount} 金額、{due} 期限、{url} 請求書リンク、{issuer} 自社名、{issuer_tel}、{issuer_email}</small></label>
   </div>
+</section>
 
+<section class="card">
   <h2>請求書の初期値</h2>
   <div class="grid2">
     <label>請求書番号の形<select name="number_style">
@@ -109,7 +114,8 @@ export function settingsPage() {
       ${Object.entries({ 0: '翌月末', 7: '発行日から7日後', 14: '発行日から14日後', 30: '発行日から30日後', 60: '発行日から60日後' }).map(([k, l]) => `<option value="${k}"${String(s.due_days) === k ? ' selected' : ''}>${l}</option>`).join('')}
     </select><small>手で請求書を作るときの初期値です。CBMの明細と固定の請求は、いつも翌月末になります。</small></label>
   </div>
-  <div class="actions"><button class="btn primary">保存</button></div>
+</section>
+  <div class="actions save-bar"><button class="btn primary">保存</button></div>
 </form>
 
 ${store.backend.kind !== 'firestore' ? `
