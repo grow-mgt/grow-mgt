@@ -45,6 +45,22 @@
 </head>
 <body>
 <div id="app"><main><p class="muted">読み込み中…（最初は10秒ほどかかることがあります）</p></main></div>
+<script>
+// 新しい版が出ていたら、古い部品を捨てて読み込み直す（更新してから最大10分、前の画面のままになるのを防ぐ）
+(function () {
+  if (!/github\.io$/.test(location.hostname)) return;
+  fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (v) {
+    if (!v || !v.v) return;
+    var had = null; try { had = localStorage.getItem('grow-mgt-version'); } catch (e) { return; }
+    if (had === v.v) return;
+    var files = ['./', 'assets/style.css', 'app/app.js'].concat([].map.call(document.querySelectorAll('link[rel=modulepreload]'), function (l) { return l.getAttribute('href'); }).filter(function (h) { return h.indexOf('http') !== 0; }));
+    Promise.all(files.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); })).then(function () {
+      try { localStorage.setItem('grow-mgt-version', v.v); } catch (e) {}
+      if (had !== null) location.reload(); // 初めて開いたときは、読み込み直さない
+    });
+  }).catch(function () {});
+})();
+</script>
 <script type="module" src="app/app.js"></script>
 </body>
 </html>
