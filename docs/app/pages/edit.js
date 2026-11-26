@@ -297,7 +297,7 @@ ${locked ? '<p class="muted small">※入金記録がある請求書です。金
         }
         refreshPaymentStatus(target);
         await store.saveInvoice(target);
-        // シービーエムの明細から作った請求書を直したら、控えの明細（年間管理表）にも反映する
+        // CBMの明細から作った請求書を直したら、控えの明細（年間管理表）にも反映する
         const sy = id ? await syncLinesFromInvoice(oldItems, target) : null;
         const syMsg = sy && (sy.changed || sy.removed || sy.added || sy.missed)
           ? '（年次集計にも反映：' + [sy.changed ? '変更' + sy.changed + '行' : '', sy.removed ? '削除' + sy.removed + '行' : '', sy.added ? '追加' + sy.added + '行' : '', sy.missed ? '明細に見つからず反映できなかった行' + sy.missed + '行' : ''].filter(Boolean).join('・') + '）' : '';

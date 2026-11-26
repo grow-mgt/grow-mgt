@@ -38,7 +38,7 @@ export function kanriPage() {
     <button class="btn small" id="kMail"${empty ? ' disabled' : ''}>CSVをメールで送る</button>
   </div>
 </div>
-<p class="small muted">卸先ごとの金額は、シービーエムからの仕入れ（明細の 数量×単価 を卸先ごとに足したもの・税込）です。請求書を手で直すと、明細とこの表にも反映されます。下の「売上」は、CBMの請求書（下書きを除く）を件名の「◯月分」で集計したものです。</p>
+<p class="small muted">卸先ごとの金額は、CBMからの仕入れ（明細の 数量×単価 を卸先ごとに足したもの・税込）です。請求書を手で直すと、明細とこの表にも反映されます。下の「売上」は、CBMの請求書（下書きを除く）を件名の「◯月分」で集計したものです。</p>
 
 ${k.noRows && !empty ? '<div class="flash warn" style="position:static">今までのスプレッドシートの年間管理表を、まだ取り込んでいません。いまは読み込み済みの明細の月だけが出ています。下の「スプレッドシートの年間管理表を取り込む」から取り込むと、卸先の並び・グループ・過去の月の金額が入ります。</div>' : ''}
 ${k.pending.length ? `
@@ -54,7 +54,7 @@ ${k.pending.length ? `
   </tbody></table>
 </section>` : ''}
 
-${empty ? '<div class="empty">年次集計はまだ空です。下の「スプレッドシートの年間管理表を取り込む」から今までの表を入れるか、<a href="#cbm">シービーエムの明細</a>を読み込んでください。</div>' : `
+${empty ? '<div class="empty">年次集計はまだ空です。下の「スプレッドシートの年間管理表を取り込む」から今までの表を入れるか、<a href="#cbm">CBMの明細</a>を読み込んでください。</div>' : `
 <div class="table-wrap">
 <table class="list report kanri">
   <thead>
@@ -97,10 +97,10 @@ ${curTab ? (() => { const t = linesTable(curTab); return `
       root.querySelectorAll('a[data-ym]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); sel.ym = a.dataset.ym; go('kanri'); }));
       const on = (id, fn) => { const el = root.querySelector(id); if (el) el.addEventListener('click', fn); };
       on('#kCsv', () => exportCsv(kanriTable(k), fileBase + '.csv'));
-      on('#kLinesCsv', () => exportCsv(linesTable(curTab), `シービーエム明細_${ymLabel(sel.ym)}.csv`));
+      on('#kLinesCsv', () => exportCsv(linesTable(curTab), `CBM明細_${ymLabel(sel.ym)}.csv`));
       on('#kMail', () => {
         const files = [{ name: fileBase + '.csv', table: kanriTable(k) }];
-        if (curTab) files.push({ name: `シービーエム明細_${ymLabel(sel.ym)}.csv`, table: linesTable(curTab) });
+        if (curTab) files.push({ name: `CBM明細_${ymLabel(sel.ym)}.csv`, table: linesTable(curTab) });
         mailCsv({ title: '年次集計をメールで送る', files, subject: `【${store.setting('company') || 'GROW'}】年次集計（${fy}年度）`,
           body: `お疲れさまです。\n\n年次集計（${fy}年度）をCSVでお送りします。\nご確認をお願いいたします。` });
       });

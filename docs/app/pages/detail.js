@@ -42,7 +42,7 @@ export function detailPage(id) {
 ${String(inv.check_note || '').trim() !== '' ? (needsCheck(inv) ? `
 <section class="card remark-box">
   <h2 style="margin-top:0">PDFの備考あり・要確認 <span class="badge warn">送る前に目で確認してください</span></h2>
-  <p class="small">シービーエムの請求書の備考に、次の記載がありました。この請求書の品目・単価・金額が、備考のとおりになっているか確かめてください。</p>
+  <p class="small">CBMの請求書の備考に、次の記載がありました。この請求書の品目・単価・金額が、備考のとおりになっているか確かめてください。</p>
   <p class="remark-text">${nl2br(inv.check_note)}</p>
   <div class="btn-row"><button type="button" class="btn primary" id="checkDone">確認しました（内容は正しい）</button><a class="btn" href="#edit-${id}">編集して直す</a></div>
 </section>` : `<p class="small muted remark-done">PDFの備考は確認済みです（${h(jdatetime(inv.checked_at))}${inv.checked_by ? '・' + h(inv.checked_by) : ''}）：${h(String(inv.check_note).replace(/\n/g, '／'))}</p>`) : ''}

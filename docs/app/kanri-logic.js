@@ -1,4 +1,4 @@
-// 卸先別の年間管理表（シービーエムからの仕入れを、卸先×月で並べる）。今までのスプレッドシート「卸先別_年間管理表」と同じ形
+// 卸先別の年間管理表（CBMからの仕入れを、卸先×月で並べる）。今までのスプレッドシート「卸先別_年間管理表」と同じ形
 //  - 明細（控え）のある月：明細の 数量×単価 を卸先ごとに足す（自動）
 //  - 明細のない月：手で入れた金額（スプレッドシートから貼り付けて取り込める）
 import { store } from './store.js';
@@ -159,7 +159,7 @@ const isLineItem = (it) => !!it.product_id || !!it.item_date; // 月額固定な
 const itemKey = (it) => [it.product_id || 'n:' + it.name, it.item_date || '', it.ship_to || '', Number(it.qty)].join('|');
 
 /**
- * シービーエムの明細から作った請求書を手で直したら、控えの明細にも反映する。
+ * CBMの明細から作った請求書を手で直したら、控えの明細にも反映する。
  * 戻り値：null（対象外）か { changed, removed, added, missed }
  */
 export async function syncLinesFromInvoice(oldItems, inv) {

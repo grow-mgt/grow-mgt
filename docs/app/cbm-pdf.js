@@ -1,4 +1,4 @@
-// シービーエムの請求書PDF（Excelから出力した、文字データのあるPDF）から明細を取り出す
+// CBMの請求書PDF（Excelから出力した、文字データのあるPDF）から明細を取り出す
 // 読むもの：《〇〇薬局様分》の見出し、ご注文日・摘要・数量・単価・金額の行、小計、備考の「※1 お客様価格は￥…」
 let pdfjsReady = null;
 function loadPdfjs() {
@@ -58,7 +58,7 @@ export async function parseCbmPdfs(files) {
   for (const f of files) {
     const rows = await pdfRows(f.buf);
     const text = rows.map((r) => r.join(' ')).join('\n');
-    if (text.replace(/\s/g, '').length < 40) throw new Error(`「${f.name}」には文字データがありません（紙をスキャンしたPDFのようです）。シービーエムに、Excelから出力したPDFを送ってもらってください。`);
+    if (text.replace(/\s/g, '').length < 40) throw new Error(`「${f.name}」には文字データがありません（紙をスキャンしたPDFのようです）。CBMに、Excelから出力したPDFを送ってもらってください。`);
     docs.push({ name: f.name, rows, text, head: /請求\s*No/u.test(text) || /請\s*求\s*書/u.test(text), foot: /消費税/u.test(text) && /お振込先|合計/u.test(text) });
   }
   // 並べる順：請求書の1枚目 → 途中（ファイル名の番号順）→ 合計のある最後の1枚
@@ -124,7 +124,7 @@ export async function parseCbmPdfs(files) {
     else if (mark) line.note = mark + '（備考欄に説明が見つかりません）';
     lines.push(line);
   }
-  if (!lines.length) throw new Error('明細の行を見つけられませんでした。シービーエムの請求書のPDFか確かめてください。');
+  if (!lines.length) throw new Error('明細の行を見つけられませんでした。CBMの請求書のPDFか確かめてください。');
   const sum = lines.reduce((a, l) => a + l.qty * l.cost, 0);
   // どの明細にも結び付かなかった備考は「全体の備考」として、その月の請求書すべてで確認してもらう
   for (const [mk, v] of Object.entries(marks)) if (!v.used) general.push(v.text);

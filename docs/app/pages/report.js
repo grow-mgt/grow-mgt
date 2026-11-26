@@ -58,7 +58,7 @@ export function reportPage() {
   const clients = Object.entries(byClient).map(([name, row]) => [name, months.map((m) => row[m] || 0)]).sort((a, b) => sum(b[1]) - sum(a[1]));
   const cells = (row) => row.map((v) => `<td class="r${v ? '' : ' zero'}">${v ? nf(v) : '-'}</td>`).join('');
   const mainWord = basis === 'paid' ? '入金額' : '売上（税込）';
-  // CBMの仕入（シービーエムからの請求・税込）と粗利。対象月で集計しているときだけ出す
+  // CBMの仕入（CBMからの請求・税込）と粗利。対象月で集計しているときだけ出す
   const showProfit = basis === 'target' && bizList.some((b) => b.id === 1);
   const cost = showProfit ? buildKanri(fy).totalTax : months.map(() => 0);
   const cbmSales = rowOf(sales, 1);
@@ -114,7 +114,7 @@ export function reportPage() {
   </tbody>
 </table>
 </div>
-${showProfit ? '<p class="small muted mt">※CBMの「仕入」は、シービーエムからの請求（年次集計と同じ金額・税込）です。「粗利」は 売上（税込）− 仕入（税込）、「利益率」は 粗利 ÷ 売上 です。売上か仕入のどちらかがまだない月は「-」にして、年度合計の粗利にも入れていません。</p>' : ''}
+${showProfit ? '<p class="small muted mt">※CBMの「仕入」は、CBMからの請求（年次集計と同じ金額・税込）です。「粗利」は 売上（税込）− 仕入（税込）、「利益率」は 粗利 ÷ 売上 です。売上か仕入のどちらかがまだない月は「-」にして、年度合計の粗利にも入れていません。</p>' : ''}
 ${noBreak && basis !== 'paid' ? `<p class="small muted mt">※invoyから取り込んだ請求書${noBreak}件は明細（消費税の内訳）がないので、「売上（税抜）」にも税込の金額で入っています。</p>` : ''}
 
 ${bid && clients.length ? `

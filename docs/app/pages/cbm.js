@@ -1,4 +1,4 @@
-// シービーエムの請求書から作る（今までの cbm_import.php と同じ画面）
+// CBMの請求書から作る（今までの cbm_import.php と同じ画面）
 import { store } from '../store.js';
 import { state, go, setBiz, setFilter } from '../nav.js';
 import * as cbm from '../cbm-logic.js';
@@ -33,12 +33,12 @@ function loadPage() {
   const td = today();
   const html = `
 <p class="crumb"><a href="#list">請求書</a> ›</p>
-<h1>シービーエムの請求書から作る</h1>
-<p class="muted">シービーエムの請求書の明細を読み込んで、請求先ごとに請求書の下書きを作ります。単価は、それぞれの取引先の販売単価になります。</p>
+<h1>CBMの請求書から作る</h1>
+<p class="muted">CBMの請求書の明細を読み込んで、請求先ごとに請求書の下書きを作ります。単価は、それぞれの取引先の販売単価になります。</p>
 
 <form class="card form narrow-wide" id="pdfForm">
   <h2>請求書のPDFから読み込む</h2>
-  <p class="small muted">シービーエムから届いた請求書のPDFを選んでください。2枚目・3枚目に分かれているときは、まとめて選びます（順番は自動でそろえます）。読み取った明細の合計が、請求書の小計と合うかを確かめてから取り込みます。</p>
+  <p class="small muted">CBMから届いた請求書のPDFを選んでください。2枚目・3枚目に分かれているときは、まとめて選びます（順番は自動でそろえます）。読み取った明細の合計が、請求書の小計と合うかを確かめてから取り込みます。</p>
   <label>PDFファイル<input type="file" name="files" accept="application/pdf,.pdf" multiple required></label>
   <p class="small" id="pdfMsg"></p>
   <div class="actions"><button class="btn primary">PDFを読み込む</button></div>
@@ -62,7 +62,7 @@ ${tabs.length ? `
     <td class="r"><button class="btn small" data-open="${h(t)}">開く</button>${cbm.rebuildPreview(t).redo ? ` <button class="btn small" data-rebuild="${h(t)}">未完成を作り直す</button>` : ''}</td></tr>`).join('')}</table>
 </div>` : ''}`;
   return {
-    title: 'シービーエムの請求書から作る', active: 'list', html,
+    title: 'CBMの請求書から作る', active: 'list', html,
     mount(root) {
       root.querySelector('#pdfForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -145,7 +145,7 @@ function planPage() {
 
   const html = `
 <p class="crumb"><a href="#list">請求書</a> ›</p>
-<h1>シービーエムの請求書から作る</h1>
+<h1>CBMの請求書から作る</h1>
 <div class="head-row">
   <p class="muted">「${h(tab)}」${lines.length}行 → 請求書 ${pl.invoices.size}件${placed < lines.length ? `（請求先が決まっていない行が${lines.length - placed}行あります）` : ''}</p>
   <div class="btns"><button class="btn small" id="resetCbm">別の明細を読み込む</button><button class="btn small" id="rebuildCbm">未完成を作り直す</button></div>
@@ -255,7 +255,7 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
 </form>`;
 
   return {
-    title: 'シービーエムの請求書から作る', active: 'list', html,
+    title: 'CBMの請求書から作る', active: 'list', html,
     mount(root) {
       // 画面に入っている手入力の単価を集める
       const typedPrices = () => { const o = {}; root.querySelectorAll('input[data-key]').forEach((i) => { const v = toIntOrNull(i.value); if (v !== null) o[i.dataset.key] = v; }); return o; };

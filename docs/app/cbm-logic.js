@@ -1,4 +1,4 @@
-// シービーエムの明細 → 請求書の下書き（今までの cbm_sync.php / source_sync.php の照合と同じ結果になるように移したもの）
+// CBMの明細 → 請求書の下書き（今までの cbm_sync.php / source_sync.php の照合と同じ結果になるように移したもの）
 import { store } from './store.js';
 import { calcInvoice, nextNumber, priceInfo } from './logic.js';
 import { today, nowUtc, endOfNextMonth, randomToken, toIntOrNull } from './util.js';
@@ -158,7 +158,7 @@ export function storedLines(tab) {
       ...(r.note ? { note: r.note } : {}), ...(r.cust_price != null ? { cust_price: Number(r.cust_price) } : {}) }));
 }
 
-/** 品名の対応表にない商品を足す（原価はシービーエムの単価）。足した数を返す */
+/** 品名の対応表にない商品を足す（原価はCBMの単価）。足した数を返す */
 export async function prepareProducts(lines) {
   const alias = productAlias();
   let added = 0; const seen = new Set();
@@ -211,7 +211,7 @@ export function plan(lines, overrides = {}) {
     const pid = out.items.get(l.name).product_id;
     const client = store.client(cid);
     let info;
-    // グループの親会社（すべて仕入単価）：販売単価を仕入単価とちがう金額に手で変えた商品はその金額、ほかは明細の単価（シービーエムの請求のまま）
+    // グループの親会社（すべて仕入単価）：販売単価を仕入単価とちがう金額に手で変えた商品はその金額、ほかは明細の単価（CBMの請求のまま）
     const cpRow = pid ? store.db.clientPrices.find((x) => x.client_id === cid && x.product_id === pid) : null;
     const prodCost = pid && store.product(pid) && store.product(pid).cost != null ? Number(store.product(pid).cost) : null;
     const hand = cpRow && Number(cpRow.price) !== prodCost ? cpRow : null;

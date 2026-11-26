@@ -20,7 +20,7 @@ export function productsPage() {
   const products = [...store.db.products].sort((a, b) => (b.active - a.active) || a.name.localeCompare(b.name, 'ja'));
   const special = (p) => store.db.clientPrices.filter((x) => x.product_id === p.id).length;
   const html = head('list') + `
-<p class="muted">商品と、シービーエムからの仕入単価の一覧です。取引先に請求する単価は「販売単価」で、取引先ごとに入れます（グループの親会社だけ、仕入単価のまま請求します）。</p>
+<p class="muted">商品と、CBMからの仕入単価の一覧です。取引先に請求する単価は「販売単価」で、取引先ごとに入れます（グループの親会社だけ、仕入単価のまま請求します）。</p>
 <form id="prodForm">
   <div class="table-wrap">
   <table class="list edit">

@@ -107,7 +107,7 @@ export function settingsPage() {
     <label>番号の頭につける文字<input name="number_prefix" value="${h(s.number_prefix)}" class="mono"><small>「頭の文字＋年月＋番号」のときに使います</small></label>
     <label>お支払期限<select name="due_days">
       ${Object.entries({ 0: '翌月末', 7: '発行日から7日後', 14: '発行日から14日後', 30: '発行日から30日後', 60: '発行日から60日後' }).map(([k, l]) => `<option value="${k}"${String(s.due_days) === k ? ' selected' : ''}>${l}</option>`).join('')}
-    </select><small>手で請求書を作るときの初期値です。シービーエムの明細と固定の請求は、いつも翌月末になります。</small></label>
+    </select><small>手で請求書を作るときの初期値です。CBMの明細と固定の請求は、いつも翌月末になります。</small></label>
   </div>
   <div class="actions"><button class="btn primary">保存</button></div>
 </form>
