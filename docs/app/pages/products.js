@@ -1,6 +1,6 @@
 // 商品・単価（今までの products.php と同じ画面）
 import { store } from '../store.js';
-import { go } from '../nav.js';
+import { go, state } from '../nav.js';
 import { h, nf, toIntOrNull, nowUtc } from '../util.js';
 import { priceInfo } from '../logic.js';
 import { flash, confirmBox } from '../ui.js';
@@ -107,7 +107,9 @@ export function productsPage() {
 /* ---------- 販売単価（取引先を選ぶと、商品と単価が縦に並ぶ） ---------- */
 const pick = { client: 0, onlySet: false };
 export function matrixPage() {
-  const clients = [...store.db.clients].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  // いま開いている事業（CBMなど）の取引先だけを出す
+  const bid = state.biz;
+  const clients = store.db.clients.filter((x) => !bid || Number(x.business_id || 1) === bid).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
   if (!clients.some((c) => c.id === pick.client)) pick.client = 0;
   const c = pick.client ? store.client(pick.client) : null;
   const mine = new Map(store.db.clientPrices.filter((x) => c && x.client_id === c.id).map((x) => [x.product_id, x]));
@@ -118,7 +120,7 @@ export function matrixPage() {
   const label = (x) => x.name + (x.corp_name ? '（' + x.corp_name + '）' : '');
 
   const html = head('matrix') + `
-<p class="muted">取引先を選ぶと、その取引先に請求するときの単価が、商品ごとに縦に並びます。金額はすべて税抜です。</p>
+<p class="muted">取引先を選ぶと、その取引先に請求するときの単価が、商品ごとに縦に並びます。金額はすべて税抜です。${bid ? `選べるのは「${h(store.bizOf(bid).name)}」の取引先だけです。` : ''}</p>
 <div class="card form">
   <label style="max-width:520px">取引先
     <select id="pickClient"><option value="0">取引先を選んでください…</option>${clients.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>${h(label(x))}</option>`).join('')}</select>
