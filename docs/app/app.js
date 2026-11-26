@@ -25,8 +25,8 @@ function header(active, bizTabs) {
   const bid = state.biz;
   const cur = bid ? store.bizOf(bid) : null;
   const rec = cur && isReconcile(cur);
-  const nav = [['list', bid === 0 ? '全体' : (rec ? '入金予定' : '請求書')], ['clients', '取引先'], ['products', '商品・単価'], ['payments', '入金照合'], ['report', '月次集計'], ['kanri', '年次集計'], ['catalog', '商品データ格納庫'], ['settings', '設定']]
-    .filter(([k]) => !(k === 'products' && (rec || bid === 0)));
+  // 上のメニューは、どの事業を開いていても同じ並びにする（押すたびに項目が増えたり減ったりしないように）
+  const nav = [['list', '請求書'], ['clients', '取引先'], ['products', '商品・単価'], ['payments', '入金照合'], ['report', '月次集計'], ['kanri', '年次集計'], ['catalog', '商品データ格納庫'], ['settings', '設定']];
   let html = `<header class="top"><a class="brand" href="#list">GROW 請求・入金管理</a><nav>`;
   for (const [k, label] of nav) html += `<a href="#${k === 'products' ? 'matrix' : k}"${k === active ? ' class="on"' : ''}>${label}</a>`; // 「商品・単価」は、販売単価の画面から開く
   if (store.backend.kind === 'firestore') html += `<a href="#" class="logout" id="logoutLink" title="${h(store.backend.userEmail())}">ログアウト</a>`;
@@ -101,8 +101,7 @@ function render() {
   app.querySelectorAll('[data-biz]').forEach((a) => a.addEventListener('click', (e) => {
     e.preventDefault(); setBiz(a.dataset.biz);
     // 取引先・商品の画面では、その画面のまま事業だけ切り替える
-    const nb = Number(a.dataset.biz), rec = nb && isReconcile(store.bizOf(nb));
-    const keep = a.closest('.biz-tabs') && (['clients', 'payments', 'report'].includes(route) || ((route === 'products' || route === 'matrix') && nb && !rec)) ? route : 'list';
+    const keep = a.closest('.biz-tabs') && ['clients', 'payments', 'report', 'products', 'matrix'].includes(route) ? route : 'list';
     go(keep);
   }));
   const rp = document.getElementById('resetPreview');
