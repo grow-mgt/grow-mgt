@@ -7,7 +7,6 @@ import { listPage } from './pages/list.js';
 import { detailPage } from './pages/detail.js';
 import { editPage } from './pages/edit.js';
 import { printPage } from './pages/print.js';
-import { stubPage } from './pages/stub.js';
 import { clientsPage, clientEditPage } from './pages/clients.js';
 import { productsPage, matrixPage } from './pages/products.js';
 import { cbmPage } from './pages/cbm.js';
@@ -21,8 +20,6 @@ import { expectPage, bulkMailPage } from './pages/batch.js';
 import { artifactBackendOrNull } from './backend-artifact.js';
 
 import { state, go, setBiz } from './nav.js';
-
-const NOT_YET = { sheet: 'スプシを最新にする' };
 
 function header(active, bizTabs) {
   const bid = state.biz;
@@ -79,7 +76,6 @@ function render() {
   else if (route === 'bulkmail') page = bulkMailPage(arg.split('-').map(Number).filter(Boolean));
   else if (route === 'catalog') page = catalogPage();
   else if (route === 'citem') page = catalogEditPage(arg);
-  else if (NOT_YET[route]) page = stubPage(route, NOT_YET[route]);
   else page = listPage();
   if (!page) { location.hash = 'list'; return; }
 

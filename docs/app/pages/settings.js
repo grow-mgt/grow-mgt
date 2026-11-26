@@ -18,7 +18,7 @@ const NEW_PERSON = { name: '', edit: true, send: true, del: true, settings: true
 let previewPeople = { 'tantou@example.com': { ...NEW_PERSON, name: '担当者（例）' }, 'zeirishi@example.com': { name: '税理士（例）', edit: false, send: false, del: false, settings: false, export: false, backup: false, roles: false } };
 import { flash, showFlash } from '../ui.js';
 
-const KEYS = ['company', 'representative', 'postal', 'address', 'tel', 'fax', 'email', 'reg_no', 'bank', 'seal_image', 'number_style', 'mail_from_name', 'due_days', 'number_prefix', 'mail_subject', 'mail_body'];
+const KEYS = ['company', 'representative', 'postal', 'address', 'tel', 'fax', 'email', 'reg_no', 'bank', 'seal_image', 'number_style', 'due_days', 'number_prefix', 'mail_subject', 'mail_body'];
 const toHalf = (s) => String(s).replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
 
 // 担当者（メールの差し出し人）。設定の中に [{name, email}] の形で持つ
@@ -93,8 +93,6 @@ export function settingsPage() {
   </div>
   <button type="button" class="btn small" id="addStaff">＋ 担当者を追加</button>
   <div class="grid2 mt">
-    <label>差出人名<input name="mail_from_name" value="${h(s.mail_from_name)}" placeholder="空欄なら会社名"></label>
-    <label class="check"><input type="checkbox" name="mail_bcc_self" value="1"${s.mail_bcc_self === '1' ? ' checked' : ''}> 送ったメールの控えを、担当者にも届ける（BCC）</label>
     <label class="span2">メールの件名<input name="mail_subject" value="${h(s.mail_subject)}"></label>
     <label class="span2">メールの本文<textarea name="mail_body" rows="14" class="mono">${h(s.mail_body)}</textarea>
       <small>差し込める項目：{client} 宛名（法人名＋御中）、{item} 件名から月を外したもの（例：薬局消耗品）、{contact} ご担当者、{number} 請求書番号、{title} 件名、{amount} 金額、{due} 期限、{url} 請求書リンク、{issuer} 自社名、{issuer_tel}、{issuer_email}</small></label>
@@ -283,7 +281,6 @@ ${store.backend.kind !== 'firestore' ? `
         store.guard('settings');
         const f = e.target, v = {};
         for (const k of KEYS) v[k] = String(f[k].value || '').trim();
-        v.mail_bcc_self = f.mail_bcc_self.checked ? '1' : '0';
         v.reg_no = toHalf(v.reg_no).toUpperCase();
         v.number_prefix = v.number_prefix.replace(/[^A-Za-z0-9-]/g, '') || 'INV';
         const list = [];

@@ -84,7 +84,6 @@ export function listPage() {
       <div class="btns">
         ${bid === 1 ? `<a class="btn" href="#cbm">シービーエムの明細から作る</a>` : ''}
         ${rec ? `<a class="btn" href="#expect">毎月の入金予定をまとめて作る</a>` : `<a class="btn" href="#fixed">毎月の固定の請求をまとめて作る</a>`}
-        <a class="btn" href="#sheet">スプシを最新にする</a>
         <a class="btn primary" href="#new">＋ ${word}を作る</a>
       </div>
     </div>
