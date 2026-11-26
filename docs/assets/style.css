@@ -111,8 +111,9 @@ table { border-collapse: collapse; width: 100%; }
 .list th, .list td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 .list th.r, .list td.r { text-align: right; }
 .list thead th { font-size: 12px; color: var(--muted); font-weight: 600; background: #fafbfc; }
-.list tbody tr { cursor: pointer; }
-.list tbody tr:hover { background: #f8f9fb; }
+/* 行を押すと開ける表（請求書の一覧・取引先の一覧）だけ、指のカーソルと色の変化を付ける */
+#invRows tr, #clientRows tr { cursor: pointer; }
+#invRows tr:hover, #clientRows tr:hover { background: #f8f9fb; }
 .list tr:last-child td { border-bottom: 0; }
 .list td { font-variant-numeric: tabular-nums; }
 .list.small td, .list.small th { padding: 6px 10px; font-size: 12px; }
