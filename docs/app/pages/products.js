@@ -20,7 +20,7 @@ export function productsPage() {
   const products = [...store.db.products].sort((a, b) => (b.active - a.active) || a.name.localeCompare(b.name, 'ja'));
   const special = (p) => store.db.clientPrices.filter((x) => x.product_id === p.id).length;
   const html = head('list') + `
-<p class="muted">請求書の明細で商品名を選ぶと、<b>その取引先の単価 → その取引先のルール（原価／原価＋◯円）→ 標準単価</b>の順で自動で入ります。取引先ごとの単価は「販売単価」か、各取引先の画面で入れます。</p>
+<p class="muted">商品と、シービーエムからの仕入単価の一覧です。取引先に請求する単価は「販売単価」で、取引先ごとに入れます（グループの親会社だけ、仕入単価のまま請求します）。</p>
 <form id="prodForm">
   <div class="table-wrap">
   <table class="list edit">
@@ -116,23 +116,23 @@ export function matrixPage() {
   let products = store.db.products.filter((p) => p.active === 1 || mine.has(p.id))
     .sort((a, b) => (mine.has(b.id) - mine.has(a.id)) || a.name.localeCompare(b.name, 'ja'));
   if (pick.onlySet) products = products.filter((p) => mine.has(p.id));
-  const RULE = { cost_all: 'すべて原価（仕入単価）で請求する取引先です。下に単価を入れても、原価が優先されます。', cost: '単価を入れていない商品は、原価（仕入単価）で請求します。', cost_plus: '単価を入れていない商品は、原価＋' + nf(c ? Number(c.price_rule_amount) || 0 : 0) + '円で請求します。' };
+  const costAll = !!c && c.price_rule === 'cost_all';
   const label = (x) => x.name + (x.corp_name ? '（' + x.corp_name + '）' : '');
 
   const html = head('matrix') + `
-<p class="muted">取引先を選ぶと、その取引先に請求するときの単価が、商品ごとに縦に並びます。金額はすべて税抜です。${bid ? `選べるのは「${h(store.bizOf(bid).name)}」の取引先だけです。` : ''}</p>
+<p class="muted">取引先を選ぶと、その取引先に請求する単価（販売単価）が、商品ごとに縦に並びます。金額はすべて税抜です。${bid ? `選べるのは「${h(store.bizOf(bid).name)}」の取引先だけです。` : ''}</p>
 <div class="card form">
   <label style="max-width:520px">取引先
     <select id="pickClient"><option value="0">取引先を選んでください…</option>${clients.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>${h(label(x))}</option>`).join('')}</select>
   </label>
-  ${c ? `<p class="small muted" style="margin:8px 0 0">単価を入れた商品：${mine.size}件${c.price_rule && RULE[c.price_rule] ? '　／　' + RULE[c.price_rule] : ''}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
+  ${c ? `<p class="small muted" style="margin:8px 0 0">${costAll ? '<b>グループの親会社なので、すべて仕入単価で請求します。</b>販売単価は入れられません。' : '販売単価を入れた商品：' + mine.size + '件'}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
 </div>
 ${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
 <form id="matrixForm">
   <p class="small" style="margin:14px 0 8px"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="onlySet" style="width:auto;margin:0"${pick.onlySet ? ' checked' : ''}> 単価を入れた商品だけ表示</label></p>
   <div class="table-wrap">
   <table class="list edit">
-    <thead><tr><th>商品名</th><th class="r">仕入単価</th><th class="w-price r">販売単価（この取引先）</th><th class="r">実際に請求する単価</th><th>その理由</th><th class="r">粗利</th><th class="r">粗利率</th></tr></thead>
+    <thead><tr><th>商品名</th><th class="r">仕入単価</th><th class="w-price r">販売単価</th><th class="r">粗利</th><th class="r">粗利率</th></tr></thead>
     <tbody>
     ${products.map((p) => {
       const m = mine.get(p.id), info = priceInfo(c.id, p.id);
@@ -141,18 +141,16 @@ ${!c ? '<div class="empty">上で取引先を選んでください。</div>' : `
       return `<tr class="${p.active ? '' : 'off'}">
         <td>${h(p.name)}</td>
         <td class="r">${p.cost != null ? nf(p.cost) : '<span class="muted">-</span>'}</td>
-        <td><input data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${m ? ' set' : ''}" inputmode="numeric" placeholder="未入力"></td>
-        <td class="r b">${info.price != null ? nf(info.price) : '<span class="badge warn">未設定</span>'}</td>
-        <td class="small muted">${h(info.from || '')}</td>
+        <td>${costAll ? `<input value="${p.cost != null ? h(p.cost) : ''}" class="r locked" readonly title="仕入単価で請求します">` : `<input data-p="${p.id}" value="${m ? h(m.price) : ''}" class="r${m ? ' set' : ''}" inputmode="numeric" placeholder="未設定">`}</td>
         <td class="r">${gp != null ? nf(gp) : ''}</td>
         <td class="r small">${rate}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="7" class="muted">表示する商品がありません。</td></tr>'}
+    }).join('') || '<tr><td colspan="5" class="muted">表示する商品がありません。</td></tr>'}
     </tbody>
   </table>
   </div>
-  <p class="small muted">「販売単価」が空欄の商品は、取引先のルール（原価／原価＋◯円）か、商品の標準単価で請求します。どれもない商品は「未設定」になり、請求書を作るときに単価を入れる必要があります。</p>
-  <div class="actions"><button class="btn primary">保存</button></div>
+  <p class="small muted">「販売単価」に入れた金額が、そのまま請求する単価になります。空欄（未設定）の商品は、請求書を作るときに単価を入れる必要があります。</p>
+  ${costAll ? '' : '<div class="actions"><button class="btn primary">保存</button></div>'}
 </form>`}`;
 
   return {

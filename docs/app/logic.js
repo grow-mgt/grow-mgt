@@ -60,9 +60,19 @@ export function refreshPaymentStatus(inv) {
   inv.paid_amount = paid;
 }
 
-// ステータスを手で変える
+// いまのステータスから選べるステータス。開封済みになったら、入金済みにしか進めない（戻せない）
+export function allowedStatuses(inv) {
+  const s = inv.status;
+  if (s === 'paid') return ['paid'];
+  if (s === 'partial') return ['paid'];
+  if (s === 'opened') return ['opened', 'paid'];
+  return ['draft', 'sent', 'opened', 'paid'];
+}
+
+// ステータスを手で変える。変えられないとき（開封済みから戻す、など）は false を返して何もしない
 export function setInvoiceStatus(inv, status, paidDate = null) {
-  if (!inv || !STATUS_LABELS[status] || status === 'partial') return;
+  if (!inv || !STATUS_LABELS[status] || status === 'partial') return false;
+  if (!allowedStatuses(inv).includes(status)) return false;
   const now = nowUtc();
   if (status !== 'paid' && (inv.status === 'paid' || inv.status === 'partial')) {
     inv.payments = []; inv.paid_amount = 0; inv.paid_at = null; // 入金済みから戻すときは、入金の記録を消す
@@ -80,6 +90,7 @@ export function setInvoiceStatus(inv, status, paidDate = null) {
     refreshPaymentStatus(inv);
   }
   store.logEvent(inv, 'status', 'ステータスを手で「' + STATUS_LABELS[status] + '」に変更' + (status === 'paid' && paidDate ? '（入金日 ' + paidDate + '）' : ''));
+  return true;
 }
 
 /* ---------- 請求書番号 ---------- */
@@ -101,17 +112,13 @@ export function nextNumber(date) {
 // 単価の決め方：①取引先ごとの単価 → ②取引先のルール（原価／原価＋◯円）→ ③商品の標準単価
 export function priceInfo(clientId, productId) {
   const cp = store.db.clientPrices.find((x) => x.client_id === Number(clientId) && x.product_id === Number(productId));
-  const c = store.client(clientId) || { price_rule: '', price_rule_amount: 0 };
+  const c = store.client(clientId) || { price_rule: '' };
   const prod = store.product(productId);
-  // 「すべて原価」の取引先は、価格表の単価より原価を優先する
-  if (c.price_rule === 'cost_all' && prod && prod.cost != null) return { price: Number(prod.cost), from: '原価' };
-  if (cp) return { price: Number(cp.price), from: 'この取引先の単価' };
-  if (!prod) return { price: null, from: '' };
-  if (c.price_rule && prod.cost != null) {
-    const amt = c.price_rule === 'cost_plus' ? Number(c.price_rule_amount) || 0 : 0;
-    return { price: Number(prod.cost) + amt, from: amt ? '原価+' + nf(amt) + '円' : '原価' };
-  }
-  if (prod.price != null) return { price: Number(prod.price), from: '標準単価' };
+  // 「すべて仕入単価」の取引先（グループの親会社）は、いつも仕入単価で請求する
+  if (c.price_rule === 'cost_all') return prod && prod.cost != null ? { price: Number(prod.cost), from: '仕入単価' } : { price: null, from: '' };
+  // それ以外は、「販売単価」に入れた金額がそのまま請求する金額
+  if (cp) return { price: Number(cp.price), from: '販売単価' };
+  if (prod && prod.price != null) return { price: Number(prod.price), from: '標準単価' };
   return { price: null, from: '' };
 }
 

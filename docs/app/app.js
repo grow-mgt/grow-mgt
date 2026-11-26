@@ -19,7 +19,7 @@ import { catalogPage, catalogEditPage } from './pages/catalog.js';
 import { expectPage, bulkMailPage } from './pages/batch.js';
 import { artifactBackendOrNull } from './backend-artifact.js';
 
-import { state, go, setBiz } from './nav.js';
+import { state, go, setBiz, once } from './nav.js';
 
 function header(active, bizTabs) {
   const bid = state.biz;
@@ -88,7 +88,14 @@ function render() {
       + `<main>${f ? `<div class="flash ${h(f[1])}">${h(f[0])}</div>` : ''}${page.html}</main>`;
   }
   document.title = (page.title ? page.title + ' | ' : '') + 'GROW 請求・入金管理';
-  window.scrollTo(0, 0);
+  // ふつうは画面の一番上へ。一覧の絞り込みを変えたときだけ、絞り込みボタンが同じ高さに残るようにする
+  const keep = once.keepTop; once.keepTop = null;
+  const fl = keep != null ? app.querySelector('#filters') : null;
+  if (fl) {
+    const y = Math.max(0, fl.getBoundingClientRect().top + window.scrollY - keep);
+    const mainEl = app.querySelector('main'); if (mainEl) mainEl.style.minHeight = (y + window.innerHeight) + 'px'; // 件数が少なくても、位置が動かないだけの高さを確保する
+    window.scrollTo(0, y);
+  } else window.scrollTo(0, 0);
 
   // 事業タブ
   app.querySelectorAll('[data-biz]').forEach((a) => a.addEventListener('click', (e) => {

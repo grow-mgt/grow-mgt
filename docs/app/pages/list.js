@@ -1,7 +1,7 @@
 // 請求書の一覧（今までの index.php と同じ画面）
 import { store } from '../store.js';
-import { state, go, setFilter } from '../nav.js';
-import { needsCheck, isReconcile, statusOf, statusBadge, setInvoiceStatus, STATUS_LABELS } from '../logic.js';
+import { state, go, setFilter, once } from '../nav.js';
+import { needsCheck, isReconcile, statusOf, statusBadge, setInvoiceStatus, allowedStatuses, STATUS_LABELS } from '../logic.js';
 import { h, yen, today, slashDate, isYmd } from '../util.js';
 import { flash, showFlash, confirmBox, askDate } from '../ui.js';
 
@@ -142,10 +142,12 @@ export function listPage() {
     title: bid ? word : 'GROW全体', active: 'list', html,
     mount(root) {
       // 絞り込み・検索
-      root.querySelectorAll('[data-f]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); setFilter(a.dataset.f, state.q); go('list'); }));
+      // 絞り込みを変えても、画面の位置が動かないようにする（ボタンの高さを覚えておく）
+      const hold = () => { const el = root.querySelector('#filters'); once.keepTop = el ? el.getBoundingClientRect().top : null; };
+      root.querySelectorAll('[data-f]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); hold(); setFilter(a.dataset.f, state.q); go('list'); }));
       const ff = root.querySelector('#filters');
-      ff.addEventListener('submit', (e) => { e.preventDefault(); setFilter(state.filter, ff.q.value); go('list'); });
-      ff.q.addEventListener('search', () => { setFilter(state.filter, ff.q.value); go('list'); });
+      ff.addEventListener('submit', (e) => { e.preventDefault(); hold(); setFilter(state.filter, ff.q.value); go('list'); });
+      ff.q.addEventListener('search', () => { hold(); setFilter(state.filter, ff.q.value); go('list'); });
 
       const tb = root.querySelector('#invRows'); if (!tb) return;
       // 行をクリックで詳細へ（チェック欄とステータスは除く）
@@ -182,8 +184,9 @@ export function listPage() {
         const ids = checked(), st = f.status.value, pd = f.paid_date.value;
         if (!ids.length || !STATUS_LABELS[st]) { showFlash('請求書とステータスを選んでください。', 'err'); return; }
         if (st === 'paid' && !(await confirmBox('選んだ請求書を入金済みにしますか？'))) return;
-        for (const id of ids) { const inv = store.invoice(id); setInvoiceStatus(inv, st, isYmd(pd) ? pd : null); await store.saveInvoice(inv); }
-        flash(ids.length + '件のステータスを「' + STATUS_LABELS[st] + '」に変えました。'); go('list');
+        let done = 0, skip = 0;
+        for (const id of ids) { const inv = store.invoice(id); if (inv.status !== st && setInvoiceStatus(inv, st, isYmd(pd) ? pd : null)) { await store.saveInvoice(inv); done++; } else if (inv.status !== st) skip++; }
+        flash(done + '件のステータスを「' + STATUS_LABELS[st] + '」に変えました。' + (skip ? ` ${skip}件は、開封済み・入金済みのため戻せないので、そのままにしました。` : ''), skip ? 'warn' : 'ok'); go('list');
       });
       root.querySelector('#bulkPdf').addEventListener('click', () => { const ids = checked(); if (ids.length) go('print-' + ids.join('-')); });
       root.querySelector('#bulkMail').addEventListener('click', () => { const ids = checked(); if (ids.length) go('bulkmail-' + ids.join('-')); });
@@ -197,7 +200,8 @@ export function listPage() {
         const r = el.getBoundingClientRect();
         menu.style.left = (window.scrollX + r.left) + 'px'; menu.style.top = (window.scrollY + r.bottom + 4) + 'px';
         menu.addEventListener('click', (ev) => ev.stopPropagation());
-        for (const st of Object.keys(names)) {
+        const invNow = store.invoice(Number(el.dataset.id)), okSt = allowedStatuses(invNow);
+        for (const st of Object.keys(names).filter((k) => okSt.includes(k) || k === invNow.status)) {
           const b = document.createElement('button');
           b.type = 'button'; b.textContent = names[st] + (st === el.dataset.st ? '（現在）' : '');
           b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;cursor:pointer;font:inherit';
@@ -206,7 +210,9 @@ export function listPage() {
             let pd = null;
             if (st === 'paid') { pd = await askDate('入金日', today()); if (!pd) return; }
             const inv = store.invoice(Number(el.dataset.id));
-            setInvoiceStatus(inv, st, pd); await store.saveInvoice(inv);
+            if (st === inv.status) return;
+            if (!setInvoiceStatus(inv, st, pd)) { showFlash('このステータスには変えられません。', 'err'); return; }
+            await store.saveInvoice(inv);
             flash('1件のステータスを「' + names[st] + '」に変えました。'); go('list');
           });
           menu.appendChild(b);

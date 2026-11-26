@@ -1,7 +1,7 @@
 // 請求書の詳細（今までの invoice.php と同じ画面）
 import { store } from '../store.js';
 import { go, setBiz } from '../nav.js';
-import { needsCheck, isReconcile, statusBadge, setInvoiceStatus, refreshPaymentStatus, fillTemplate, publicUrl, STATUS_LABELS } from '../logic.js';
+import { needsCheck, isReconcile, statusBadge, setInvoiceStatus, allowedStatuses, refreshPaymentStatus, fillTemplate, publicUrl, STATUS_LABELS } from '../logic.js';
 import { renderInvoiceDoc, fitDocs } from '../doc.js';
 import { sendMail } from '../mailer.js';
 import { staffList } from './settings.js';
@@ -19,7 +19,11 @@ export function detailPage(id) {
   const events = [...(inv.events || [])].reverse();
   const url = publicUrl(inv);
   const remain = Number(inv.total) - Number(inv.paid_amount || 0);
-  const statusChoices = irec ? { sent: '入金待ち', paid: '入金済み' } : { draft: '下書き', sent: '送付済み', opened: '開封済み', paid: '入金済み' };
+  const allChoices = irec ? { sent: '入金待ち', paid: '入金済み' } : { draft: '下書き', sent: '送付済み', opened: '開封済み', paid: '入金済み' };
+  // 開封済みになったら、入金済みにしか進めない（戻せない）
+  const okSt = allowedStatuses(inv);
+  const statusChoices = Object.fromEntries(Object.entries(allChoices).filter(([k]) => okSt.includes(k) || k === inv.status));
+  const stLocked = inv.status === 'paid' || inv.status === 'partial' ? false : okSt.length <= 2 && inv.status === 'opened';
 
   const html = `
 <div class="head-row">
@@ -116,7 +120,7 @@ ${irec ? '' : `
         <label class="pd"${inv.status === 'paid' ? '' : ' hidden'}>入金日<input type="date" name="paid_date" value="${h(inv.paid_at || today())}"></label>
         <button class="btn small">変える</button>
       </form>
-      <p class="small muted">入金済みから戻すと、入金の記録は消えます。</p>
+      <p class="small muted">${inv.status === 'paid' ? '入金済みの請求書は、ステータスを戻せません。まちがえて入金済みにしたときは、上の「入金の記録」の × で取り消してください。' : (stLocked ? '開封済みになった請求書は、入金済みにだけ変えられます（下書き・送付済みには戻せません）。' : '開封済みになると、入金済みにだけ変えられるようになります（戻せません）。')}</p>
     </section>
 
     <section class="card">
@@ -203,7 +207,8 @@ ${irec ? '' : `
         e.preventDefault();
         const st = sf.status.value, pd = sf.paid_date.value;
         if (st === 'paid' && !(await confirmBox('入金済みにしますか？'))) return;
-        setInvoiceStatus(raw, st, isYmd(pd) ? pd : null);
+        if (st === raw.status) { showFlash('ステータスは変わっていません。', 'warn'); return; }
+        if (!setInvoiceStatus(raw, st, isYmd(pd) ? pd : null)) { showFlash('このステータスには変えられません。開封済みになった請求書は、入金済みにだけ変えられます。', 'err'); return; }
         await save('ステータスを「' + STATUS_LABELS[st] + '」に変えました。');
       });
       on('#bizForm', 'submit', async (e) => {

@@ -15,7 +15,7 @@ const qtyStr = (q) => { const s = String(q == null || q === '' ? 1 : q); return 
 function ruleLabel(c) {
   if (c.price_rule === 'cost') return '価格表にない商品は原価';
   if (c.price_rule === 'cost_plus') return '価格表にない商品は原価＋' + nf(c.price_rule_amount) + '円';
-  if (c.price_rule === 'cost_all') return 'すべての商品を原価（仕入値そのまま）';
+  if (c.price_rule === 'cost_all') return 'すべて仕入単価で請求';
   return '';
 }
 
@@ -150,26 +150,24 @@ export function clientEditPage(arg) {
 
   ${prods.length && !crec ? `
   <h2>この取引先の単価</h2>
-  <p class="small muted">空欄の商品は、下の「価格表にない商品」のルールか標準単価になります。</p>
-  <label>価格表にない商品の単価
-    ${lk ? `<input value="${h(ruleLabel(c) || '標準単価')}（価格表で設定）" readonly class="locked">` : `
+  <p class="small muted">ここに入れた金額が、そのまま請求する単価になります（税抜）。空欄の商品は、請求書を作るときに単価を入れます。</p>
+  <label>請求する単価の決め方
+    ${lk ? `<input value="${h(ruleLabel(c) || '販売単価で請求')}（価格表で設定）" readonly class="locked">` : `
     <span class="rule-row">
       <select name="price_rule">
-        <option value=""${!c.price_rule ? ' selected' : ''}>標準単価</option>
-        <option value="cost"${c.price_rule === 'cost' ? ' selected' : ''}>原価（仕入単価）</option>
-        <option value="cost_plus"${c.price_rule === 'cost_plus' ? ' selected' : ''}>原価＋金額</option>
-        <option value="cost_all"${c.price_rule === 'cost_all' ? ' selected' : ''}>すべての商品を原価（仕入値そのまま）</option>
+        <option value=""${c.price_rule !== 'cost_all' ? ' selected' : ''}>販売単価で請求する（ふつうの取引先）</option>
+        <option value="cost_all"${c.price_rule === 'cost_all' ? ' selected' : ''}>すべて仕入単価で請求する（グループの親会社）</option>
       </select>
-      <input name="price_rule_amount" value="${Number(c.price_rule_amount) || ''}" class="r" placeholder="200" inputmode="numeric"> 円
+      <input type="hidden" name="price_rule_amount" value="0">
     </span>`}
   </label>
   <div class="table-wrap">
   <table class="list small cp">
-    <thead><tr><th>商品</th><th class="r">標準単価</th><th class="r">仕入単価</th><th class="r w-price">この取引先の単価</th></tr></thead>
+    <thead><tr><th>商品</th><th class="r">仕入単価</th><th class="r w-price">販売単価</th></tr></thead>
     ${prods.map((p) => {
       const m = mine.get(p.id); const fromSheet = false;
       const ph = c.id ? priceInfo(c.id, p.id) : { price: p.price, from: '' };
-      return `<tr><td>${h(p.name)}</td><td class="r muted">${p.price != null ? nf(p.price) : '未設定'}</td><td class="r muted">${p.cost != null ? nf(p.cost) : ''}</td>
+      return `<tr><td>${h(p.name)}</td><td class="r muted">${p.cost != null ? nf(p.cost) : ''}</td>
         <td><input data-pid="${p.id}" value="${m ? h(m.price) : ''}" class="r cpin${fromSheet ? ' sheet' : (m ? ' set' : '')}"${fromSheet ? ' readonly title="価格表から読み込んだ単価"' : ''} inputmode="numeric" placeholder="${ph.price != null ? nf(ph.price) + '（' + h(ph.from) + '）' : ''}"></td></tr>`;
     }).join('')}
   </table>
@@ -201,8 +199,8 @@ ${c.id ? '<div class="danger-zone"><button class="btn danger small" id="delClien
         v.merge_items = form.merge_items.checked ? 1 : 0;
         const target = c.id ? Object.assign(store.client(c.id), v) : { id: store.newId(), ...v, created_at: nowUtc(), sheet_note: '', source: 'app', price_rule: '', price_rule_amount: 0 };
         if (!lk && form.price_rule) {
-          target.price_rule = ['', 'cost', 'cost_plus', 'cost_all'].includes(rule) ? rule : '';
-          target.price_rule_amount = rule === 'cost_plus' ? (toIntOrNull(form.price_rule_amount.value) || 0) : 0;
+          target.price_rule = rule === 'cost_all' ? 'cost_all' : '';
+          target.price_rule_amount = 0;
         }
         await store.saveClient(target);
         // 「すべて原価」は価格表より優先するので、名前で覚えておく（価格表を読み直しても消えないように）
