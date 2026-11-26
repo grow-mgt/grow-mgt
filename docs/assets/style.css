@@ -12,6 +12,9 @@
   --radius: 8px;
 }
 * { box-sizing: border-box; }
+/* 縦のスクロールバーの場所をいつも空けておく（画面を切り替えたときに、中身が左右に動かないように） */
+html { overflow-y: scroll; scrollbar-gutter: stable; }
+@media print { html { overflow: visible; scrollbar-gutter: auto; } }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
