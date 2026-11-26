@@ -489,3 +489,18 @@ th.sortable[data-dir="desc"]::after { content: " ▼"; font-size: 10px; }
 .remark-box { background: #fff8e6; border: 1px solid #eda100; }
 .remark-box .remark-text { background: #fff; border-left: 4px solid #eda100; padding: 10px 14px; margin: 8px 0 4px; font-weight: 600; }
 .remark-done { margin: 0 0 12px; }
+
+/* 取引先を選ぶリスト（販売単価の画面） */
+.pick { position: relative; max-width: 520px; }
+.pick-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; margin-top: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font: inherit; font-size: 15px; color: var(--ink); cursor: pointer; text-align: left; }
+.pick-btn:hover, .pick-btn[aria-expanded=true] { border-color: #2f6fde; }
+.pick-btn small { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.pick-btn i { font-style: normal; color: var(--muted); }
+.pick-list { position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid #c9ccd3; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.14); padding: 6px; }
+.pick-list input { width: 100%; margin: 0 0 6px; }
+.pick-items { max-height: min(60vh, 420px); overflow-y: auto; }
+.pick-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 14px; color: var(--ink); text-align: left; cursor: pointer; }
+.pick-item small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick-item:hover { background: #f1f4f9; }
+.pick-item.on { background: #e8f0ff; font-weight: 600; }
+.pick-item[hidden] { display: none; }

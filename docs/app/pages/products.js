@@ -121,11 +121,17 @@ export function matrixPage() {
   const html = head('matrix') + `
 <p class="muted">取引先を選ぶと、その取引先に請求する単価（販売単価）が、商品ごとに縦に並びます。金額はすべて税抜です。${bid ? `選べるのは「${h(store.bizOf(bid).name)}」の取引先だけです。` : ''}</p>
 <div class="card form">
-  <div class="small muted" style="margin-bottom:6px">取引先を選んでください</div>
-  <div class="filters" style="margin:0" id="pickClient">${clients.map((x) => `<a href="#matrix" class="chip${c && x.id === c.id ? ' on' : ''}" data-pick="${x.id}" title="${h(x.corp_name || '')}">${h(x.name)}</a>`).join('') || '<span class="muted">この事業の取引先がありません。</span>'}</div>
-  ${c ? `<p class="small muted" style="margin:12px 0 0"><b style="color:var(--ink)">${h(c.name)}${c.corp_name ? '（' + h(c.corp_name) + '）' : ''}</b>　${costAll ? '<b>グループの親会社なので、仕入単価で請求します。</b>販売単価を入れた商品だけ、その金額で請求します（入れた商品：' + mine.size + '件）。' : '販売単価を入れた商品：' + mine.size + '件'}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
+  <div class="pick" id="pickBox">
+    <span class="small muted">取引先</span>
+    <button type="button" class="pick-btn" id="pickBtn" aria-haspopup="listbox" aria-expanded="false"><span>${c ? h(c.name) + (c.corp_name ? `<small>（${h(c.corp_name)}）</small>` : '') : '取引先を選んでください…'}</span><i>▾</i></button>
+    <div class="pick-list" id="pickList" role="listbox" hidden>
+      ${clients.length > 8 ? '<input type="search" id="pickSearch" placeholder="名前でさがす" autocomplete="off">' : ''}
+      <div class="pick-items">${clients.map((x) => `<button type="button" role="option" class="pick-item${c && x.id === c.id ? ' on' : ''}" data-pick="${x.id}" data-key="${h((x.name + ' ' + (x.corp_name || '')).toLowerCase())}">${h(x.name)}${x.corp_name ? `<small>${h(x.corp_name)}</small>` : ''}</button>`).join('') || '<div class="muted small" style="padding:10px">この事業の取引先がありません。</div>'}</div>
+    </div>
+  </div>
+  ${c ? `<p class="small muted" style="margin:12px 0 0">${costAll ? '<b>グループの親会社なので、仕入単価で請求します。</b>販売単価を入れた商品だけ、その金額で請求します（入れた商品：' + mine.size + '件）。' : '販売単価を入れた商品：' + mine.size + '件'}　<a href="#client-${c.id}">この取引先の画面を開く</a></p>` : ''}
 </div>
-${!c ? '<div class="empty">上のボタンから取引先を選んでください。</div>' : `
+${!c ? '<div class="empty">上のリストから取引先を選んでください。</div>' : `
 <form id="matrixForm">
   <p class="small" style="margin:14px 0 8px"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="onlySet" style="width:auto;margin:0"${pick.onlySet ? ' checked' : ''}> 単価を入れた商品だけ表示</label></p>
   <div class="table-wrap">
@@ -154,7 +160,14 @@ ${!c ? '<div class="empty">上のボタンから取引先を選んでくださ�
   return {
     title: '販売単価 | 商品・単価', active: 'products', html,
     mount(root) {
-      root.querySelectorAll('[data-pick]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); pick.client = Number(a.dataset.pick); go('matrix'); }));
+      // 取引先のリスト（押すとすぐ開く、アプリの中のリスト）
+      const pb = root.querySelector('#pickBtn'), pl = root.querySelector('#pickList'), ps = root.querySelector('#pickSearch');
+      const openList = (on) => { pl.hidden = !on; pb.setAttribute('aria-expanded', on ? 'true' : 'false'); if (on) { const cur = pl.querySelector('.pick-item.on'); if (cur) cur.scrollIntoView({ block: 'nearest' }); } };
+      pb.addEventListener('click', (e) => { e.stopPropagation(); openList(pl.hidden); });
+      pl.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', function shut() { if (!document.body.contains(pl)) { document.removeEventListener('click', shut); return; } openList(false); });
+      if (ps) ps.addEventListener('input', () => { const q = ps.value.trim().toLowerCase(); pl.querySelectorAll('.pick-item').forEach((b) => { b.hidden = q !== '' && !b.dataset.key.includes(q); }); });
+      root.querySelectorAll('[data-pick]').forEach((a) => a.addEventListener('click', () => { pick.client = Number(a.dataset.pick); go('matrix'); }));
       const os = root.querySelector('#onlySet'); if (os) os.addEventListener('change', () => { pick.onlySet = os.checked; go('matrix'); });
       const form = root.querySelector('#matrixForm'); if (!form) return;
       form.addEventListener('submit', async (e) => {
