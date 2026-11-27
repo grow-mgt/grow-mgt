@@ -16,7 +16,7 @@ export function listPage() {
   const B = bid ? store.bizOf(bid) : null;
   const rec = B && isReconcile(B);
   const word = rec ? '入金予定' : '請求書';
-  const filter = state.filter, q = state.q.trim();
+  const filter = state.filter === 'reminded' ? 'overdue' : state.filter, q = state.q.trim(); // 「督促済」の絞り込みはやめたので、覚えていたら期限超過として扱う
   const td = today(), ym = td.slice(0, 7);
   const clientName = (v) => (store.client(v.client_id) || {}).name || '（取引先なし）';
 
