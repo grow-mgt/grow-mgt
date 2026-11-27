@@ -41,9 +41,16 @@ async function sha1(text) {
 const cut = (s, n) => { const a = [...String(s)]; return a.length > n ? a.slice(0, n).join('') + '…' : a.join(''); };
 
 /* ---------- 突き合わせ ---------- */
+// 同じ銀行口座を使っている事業（例：CBM・コンサル・その他）。口座が同じなら、まとめて請求書を探す
+const bankKey = (b) => toHalf(String((b && b.bank) || '')).replace(/\s+/gu, '');
+export function sameAccount(PB) {
+  const k = bankKey(PB);
+  return store.businesses().filter((b) => b.id === PB.id || (k !== '' && bankKey(b) === k));
+}
 async function buildMatches(PB) {
+  const bizIds = new Set(sameAccount(PB).map((b) => b.id));
   const dc = Number(PB.csv_date_col) || 0, ac = Number(PB.csv_amount_col) || 0, nc = Number(PB.csv_name_col) || 0;
-  const unpaid = store.db.invoices.filter((v) => v.status !== 'paid' && v.business_id === PB.id)
+  const unpaid = store.db.invoices.filter((v) => v.status !== 'paid' && bizIds.has(v.business_id))
     .map((v) => { const c = store.client(v.client_id) || {}; return { ...v, client_name: c.name || '', payer_kana: c.payer_kana || '' }; })
     .sort((a, b) => (a.due_date > b.due_date ? 1 : a.due_date < b.due_date ? -1 : 0));
   const doneSet = new Set(store.db.invoices.flatMap((v) => (v.payments || []).map((p) => p.row_hash).filter(Boolean)));
@@ -73,12 +80,20 @@ async function buildMatches(PB) {
       if (nameHit) { score += 40; why.push('名義一致'); } else if (score > 0) why.push('名義は不一致');
       if (score >= 40) cands.push({ inv, score, why, fee: diff > 0 && diff <= 990 });
     }
+    // 2通分をまとめて振り込まれたとき（同じ取引先・名義一致・合計がぴったり）
+    if (!cands.some((c) => c.score >= 75)) {
+      const mine = unpaid.filter((inv) => { const keys = String(inv.payer_kana).split(',').concat([inv.client_name]).map(normKana).filter((k) => [...k].length >= 2); return nName !== '' && keys.some((k) => nName.includes(k) || k.includes(nName)); });
+      for (let i = 0; i < mine.length; i++) for (let j = i + 1; j < mine.length; j++) {
+        const a = mine[i], b = mine[j];
+        if (a.client_id === b.client_id && (a.total - a.paid_amount) + (b.total - b.paid_amount) === amount) cands.push({ inv: a, inv2: b, score: 95, why: ['2通まとめて入金（合計一致）', '名義一致'], fee: false });
+      }
+    }
     cands.sort((a, b) => b.score - a.score);
     const best = cands[0] || null;
     const done = doneSet.has(hash);
     // 金額（または手数料差引の金額）と名義の両方が合うときだけ最初からチェック。名義違いは候補を選んだ状態で手で確認
     let auto = false;
-    if (best && !done) { auto = best.score >= 75 && !usedInv.has(best.inv.id); if (auto) usedInv.add(best.inv.id); }
+    if (best && !done) { auto = best.score >= 75 && !usedInv.has(best.inv.id) && !(best.inv2 && usedInv.has(best.inv2.id)); if (auto) { usedInv.add(best.inv.id); if (best.inv2) usedInv.add(best.inv2.id); } }
     matches.push({ key: 'r' + lineNo, date, amount, name, hash, cands, best, auto, done });
   }
   return { matches, unpaid };
@@ -87,7 +102,8 @@ async function buildMatches(PB) {
 /* ---------- 画面 ---------- */
 export function paymentsPage() {
   const PB = store.bizOf(state.biz || store.businesses()[0].id);
-  if (work.rows && work.biz !== PB.id) reset(); // 口座は事業ごとなので、事業を変えたらやり直し
+  const group = sameAccount(PB), groupIds = new Set(group.map((b) => b.id));
+  if (work.rows && !groupIds.has(work.biz)) reset(); // 口座が違う事業に変えたらやり直し
   if (!work.rows) work.step = 'upload';
   const step = work.step;
 
@@ -95,6 +111,7 @@ export function paymentsPage() {
 <h1>入金照合 <span class="muted small">${h(PB.name)}</span></h1>
 ${state.biz === 0 ? `<div class="flash warn">銀行口座は事業ごとに分かれているので、上のタブで事業を選んでから入金明細のCSVを読み込んでください（いまは「${h(PB.name)}」で開いています）。</div>` : ''}
 ${String(PB.bank || '').trim() !== '' ? `<p class="muted small">この事業の口座：${h(String(PB.bank).replace(/\s+/gu, ' '))}　（この口座の入出金明細を読み込んでください）</p>` : ''}
+${group.length > 1 ? `<p class="muted small">同じ口座を使っている事業（${h(group.map((b) => b.name).join('・'))}）の請求書を、まとめて探します。</p>` : ''}
 <ol class="wizard">
   <li class="${step === 'upload' ? 'on' : 'done'}">1. CSVを選ぶ</li>
   <li class="${step === 'map' ? 'on' : (step === 'match' ? 'done' : '')}">2. 列を合わせる</li>
@@ -102,7 +119,7 @@ ${String(PB.bank || '').trim() !== '' ? `<p class="muted small">この事業の�
 </ol>`;
 
   if (step === 'upload') {
-    const recent = store.db.invoices.filter((v) => v.business_id === PB.id)
+    const recent = store.db.invoices.filter((v) => groupIds.has(v.business_id))
       .flatMap((v) => (v.payments || []).map((p) => ({ ...p, number: v.number, iid: v.id, client_name: (store.client(v.client_id) || {}).name || '' })))
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')) || (b.id - a.id)).slice(0, 15);
     return {
@@ -196,7 +213,7 @@ ${recent.length ? `
         <td>${m.done ? '<span class="muted small">取込済み</span>' : `
           <select class="inv">
             <option value="">— 選ばない —</option>
-            ${m.cands.length ? `<optgroup label="候補">${m.cands.map((c, i) => `<option value="${c.inv.id}"${i === 0 ? ' selected' : ''}>${label(c.inv)}</option>`).join('')}</optgroup>` : ''}
+            ${m.cands.length ? `<optgroup label="候補">${m.cands.map((c, i) => `<option value="${c.inv.id}${c.inv2 ? '+' + c.inv2.id : ''}"${i === 0 ? ' selected' : ''}>${c.inv2 ? '【2通】' + label(c.inv) + ' ＋ ' + label(c.inv2) : label(c.inv)}</option>`).join('')}</optgroup>` : ''}
             <optgroup label="すべての未入金">${unpaid.map((u) => `<option value="${u.id}">${label(u)}</option>`).join('')}</optgroup>
           </select>
           ${m.best && m.best.fee ? '<label class="check small"><input type="checkbox" class="fee" checked> 差額は振込手数料として全額入金扱い</label>' : ''}`}
@@ -217,8 +234,21 @@ ${recent.length ? `
         for (const tr of f.querySelectorAll('tbody tr')) {
           const use = tr.querySelector('.use'); if (!use || !use.checked) continue;
           const m = matches.find((x) => x.key === tr.dataset.key);
-          const inv = store.invoice(Number(tr.querySelector('.inv').value));
+          const ids = String(tr.querySelector('.inv').value).split('+').map(Number);
+          const inv = store.invoice(ids[0]);
           if (!m || !inv || allHashes.has(m.hash)) continue;
+          if (ids.length === 2) { // 2通まとめての入金：それぞれの残額に分けて記録する
+            const pair = [inv, store.invoice(ids[1])];
+            if (!pair[1] || pair.reduce((a, v) => a + v.total - v.paid_amount, 0) !== m.amount) continue;
+            for (const v of pair) {
+              v.payments = v.payments || [];
+              v.payments.push({ id: store.newId(), paid_date: m.date, amount: v.total - v.paid_amount, payer: m.name + '（2通まとめて ' + yen(m.amount) + '）', source: 'csv', row_hash: m.hash, created_at: nowUtc() });
+              refreshPaymentStatus(v);
+              store.logEvent(v, 'pay', '入金を照合（CSV・2通まとめて）：' + yen(m.amount) + ' ' + m.name + '（' + m.date + '）');
+              await store.saveInvoice(v);
+            }
+            allHashes.add(m.hash); n++; continue;
+          }
           let amount = m.amount, note = m.name;
           const fee = tr.querySelector('.fee');
           if (fee && fee.checked) { // 振込手数料を差し引かれた入金を全額扱いにする
