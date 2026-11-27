@@ -110,7 +110,7 @@ function render() {
     store.resetPreview(); await store.init(); go('list'); showFlash('最初の状態に戻しました。');
   });
   const lo = document.getElementById('logoutLink');
-  if (lo) lo.addEventListener('click', async (e) => { e.preventDefault(); await store.backend.signOut(); location.hash = ''; location.reload(); });
+  if (lo) lo.addEventListener('click', async (e) => { e.preventDefault(); try { sessionStorage.removeItem('grow-mgt-state'); } catch (err) { /* 何もしない */ } await store.backend.signOut(); location.hash = ''; location.reload(); });
   if (page.mount) page.mount(app);
 }
 
