@@ -210,7 +210,7 @@ ${recent.length ? `
         <td>${h(slashDate(m.date))}</td>
         <td class="small">${h(m.name)}</td>
         <td class="r">${yen(m.amount)}</td>
-        <td>${m.done ? '<span class="muted small">取込済み</span>' : `
+        <td>${m.done ? '<span class="muted small">取込済</span>' : `
           <select class="inv">
             <option value="">— 選ばない —</option>
             ${m.cands.length ? `<optgroup label="候補">${m.cands.map((c, i) => `<option value="${c.inv.id}${c.inv2 ? '+' + c.inv2.id : ''}"${i === 0 ? ' selected' : ''}>${c.inv2 ? '【2通】' + label(c.inv) + ' ＋ ' + label(c.inv2) : label(c.inv)}</option>`).join('')}</optgroup>` : ''}

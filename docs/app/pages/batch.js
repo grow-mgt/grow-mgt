@@ -47,7 +47,7 @@ ${!plan.length ? '<div class="empty">「毎月の入金」を登録した取引�
         <td class="small">${h(p.items.map((i) => i.name).join('、'))}</td>
         <td class="r">${yen(p.total)}</td>
         <td>${h(slashDate(due))}</td>
-        <td class="small">${p.done ? `<a href="#invoice-${p.done.id}">作成済み ${h(p.done.number)}</a>` : ''}</td>
+        <td class="small">${p.done ? `<a href="#invoice-${p.done.id}">作成済 ${h(p.done.number)}</a>` : ''}</td>
       </tr>`).join('')}
   </table>
   </div>
@@ -141,7 +141,7 @@ ${staff.length ? `<label style="max-width:420px;margin-bottom:12px">差し出し
             ok++;
           } catch (err) { skip.push(inv.number + '（送信できず：' + err.message + '）'); }
         }
-        flash((simulated ? 'プレビューのため実際には送っていません。送ったときと同じく、' + ok + '件を「送付済み」にしました。' : ok + '件をメールで送りました。') + (skip.length ? '送れなかった請求書：' + skip.join('、') : ''), skip.length || simulated ? 'warn' : 'ok');
+        flash((simulated ? 'プレビューのため実際には送っていません。送ったときと同じく、' + ok + '件を「送付済」にしました。' : ok + '件をメールで送りました。') + (skip.length ? '送れなかった請求書：' + skip.join('、') : ''), skip.length || simulated ? 'warn' : 'ok');
         go('list');
       });
     },

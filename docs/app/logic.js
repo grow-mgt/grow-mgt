@@ -2,7 +2,7 @@
 import { store } from './store.js';
 import { h, yen, nf, jdate, today, nowUtc } from './util.js';
 
-export const STATUS_LABELS = { draft: '下書き', sent: '送付済み', opened: '開封済み', partial: '一部入金', paid: '入金済み' };
+export const STATUS_LABELS = { draft: '下書き', sent: '送付済', opened: '開封済', partial: '一部入金', paid: '入金済', overdue: '期限超過', reminded: '督促済' };
 export const isReconcile = (b) => (b && b.kind) === 'reconcile';
 
 /* ---------- 計算（インボイス制度：税率ごとに1回端数処理） ---------- */
@@ -35,7 +35,7 @@ export function calcInvoice(items, withholding, mode = 'exclude') {
 /* ---------- ステータス ---------- */
 export function statusOf(inv) {
   const s = inv.status;
-  if (s !== 'paid' && s !== 'draft' && inv.due_date < today()) return 'overdue';
+  if (s !== 'paid' && s !== 'draft' && inv.due_date < today()) return inv.reminded_at ? 'reminded' : 'overdue'; // 督促済は、期限超過のあいだだけ出る
   return s;
 }
 export function statusLabel(inv, s) {
@@ -44,12 +44,12 @@ export function statusLabel(inv, s) {
 }
 export function statusBadge(inv) {
   const s = statusOf(inv);
-  const label = s === 'overdue' ? '期限超過' : statusLabel(inv, s);
-  const extra = s === 'overdue' ? `<span class="sub">${h(statusLabel(inv, inv.status))}</span>` : '';
+  const label = s === 'overdue' ? '期限超過' : s === 'reminded' ? '督促済' : statusLabel(inv, s);
+  const extra = s === 'overdue' ? `<span class="sub">${h(statusLabel(inv, inv.status))}</span>` : s === 'reminded' ? `<span class="sub">期限超過・${h(String(inv.reminded_at).slice(5).replace('-', '/'))} 督促</span>` : '';
   return `<span class="badge b-${h(s)}">${h(label)}</span>${extra}`;
 }
 
-// 入金の記録から、入金済み・一部入金などを決め直す
+// 入金の記録から、入金済・一部入金などを決め直す
 export function refreshPaymentStatus(inv) {
   const pays = inv.payments || [];
   const paid = pays.reduce((a, p) => a + Number(p.amount), 0);
@@ -60,22 +60,34 @@ export function refreshPaymentStatus(inv) {
   inv.paid_amount = paid;
 }
 
-// いまのステータスから選べるステータス。開封済みになったら、入金済みにしか進めない（戻せない）
+// いまのステータスから選べるステータス。開封済になったら、入金済にしか進めない（戻せない）
 export function allowedStatuses(inv) {
-  const s = inv.status;
+  const s = inv.status, so = statusOf(inv);
+  if (so === 'reminded') return ['overdue', 'paid'];              // 督促済からは、入金済にだけ進める
+  if (so === 'overdue') return ['reminded', 'paid'];   // 期限超過からは、督促済か入金済にだけ進める
   if (s === 'paid') return ['paid'];
   if (s === 'partial') return ['paid'];
   if (s === 'opened') return ['opened', 'paid'];
   return ['draft', 'sent', 'opened', 'paid'];
 }
 
-// ステータスを手で変える。変えられないとき（開封済みから戻す、など）は false を返して何もしない
+// ステータスを手で変える。変えられないとき（開封済から戻す、など）は false を返して何もしない
 export function setInvoiceStatus(inv, status, paidDate = null) {
   if (!inv || !STATUS_LABELS[status] || status === 'partial') return false;
   if (!allowedStatuses(inv).includes(status)) return false;
+  if (status === 'overdue') { // 督促済を取り消して、期限超過に戻す
+    inv.reminded_at = null;
+    store.logEvent(inv, 'status', '督促済を取り消しました（期限超過に戻す）');
+    return true;
+  }
+  if (status === 'reminded') { // 督促済：期限超過の請求書にだけ付けられる印（元のステータスはそのまま）
+    inv.reminded_at = paidDate || today();
+    store.logEvent(inv, 'status', '督促済にしました（督促日 ' + inv.reminded_at + '）');
+    return true;
+  }
   const now = nowUtc();
   if (status !== 'paid' && (inv.status === 'paid' || inv.status === 'partial')) {
-    inv.payments = []; inv.paid_amount = 0; inv.paid_at = null; // 入金済みから戻すときは、入金の記録を消す
+    inv.payments = []; inv.paid_amount = 0; inv.paid_at = null; // 入金済から戻すときは、入金の記録を消す
   }
   if (status === 'draft') { inv.status = 'draft'; inv.sent_at = null; inv.opened_at = null; inv.open_count = 0; }
   else if (status === 'sent') { inv.status = 'sent'; inv.sent_at = inv.sent_at || now; inv.opened_at = null; inv.open_count = 0; }
@@ -84,7 +96,7 @@ export function setInvoiceStatus(inv, status, paidDate = null) {
     const remain = Number(inv.total) - Number(inv.paid_amount || 0);
     if (remain > 0) {
       inv.payments = inv.payments || [];
-      inv.payments.push({ id: store.newId(), paid_date: paidDate || today(), amount: remain, payer: '手動で入金済みに変更', source: 'manual', created_at: now });
+      inv.payments.push({ id: store.newId(), paid_date: paidDate || today(), amount: remain, payer: '手動で入金済に変更', source: 'manual', created_at: now });
     }
     inv.sent_at = inv.sent_at || now;
     refreshPaymentStatus(inv);

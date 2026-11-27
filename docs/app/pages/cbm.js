@@ -85,11 +85,11 @@ ${tabs.length ? `
         const added = await cbm.prepareProducts(res.lines);
         await store.saveCbmLines(tab, res.lines);
         await cbm.saveGeneralRemarks(tab, res.general);
-        const flagged = await cbm.flagExisting(tab); // 作成済みの請求書にも、備考の「要確認」を付ける
+        const flagged = await cbm.flagExisting(tab); // 作成済の請求書にも、備考の「要確認」を付ける
         Object.assign(work, { tab, lines: cbm.storedLines(tab), over: {} });
         flash(`「${tab}」をPDFから読み込みました（${res.lines.length}行・税抜 ${nf(res.sum)}円${res.subtotal === res.sum ? '・請求書の小計と一致' : ''}）。`
           + (res.notes.length || res.general.length ? ' 請求書に備考があります。下の黄色の枠を確認してください。' : '')
-          + (flagged ? ` 作成済みの請求書${flagged}件に「備考あり・要確認」の印を付けました。` : '') + (added ? ` 明細にしかない商品を${added}件、商品に足しました。` : ''), problems.length || res.notes.length || res.general.length ? 'warn' : 'ok');
+          + (flagged ? ` 作成済の請求書${flagged}件に「備考あり・要確認」の印を付けました。` : '') + (added ? ` 明細にしかない商品を${added}件、商品に足しました。` : ''), problems.length || res.notes.length || res.general.length ? 'warn' : 'ok');
         go('cbm');
       });
       root.querySelector('#pasteForm').addEventListener('submit', async (e) => {
@@ -227,7 +227,7 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
         <span class="muted small">${inv.lines.length}行${inv.show_ship ? '・納品先 ' + inv.stores.size + '店' : ''}</span>
         <span class="plan-total">税抜 ${yen(inv.subtotal)}${inv.cost ? ` <span class="muted small">（仕入 ${yen(inv.cost)}／粗利 ${yen(inv.subtotal - inv.cost)}）</span>` : ''}</span>
         ${rc.length ? `<span class="badge b-opened">＋月額固定 ${rc.length}行 ${yen(rc.reduce((a, r) => a + r.qty * r.price, 0))}</span>` : ''}
-        ${d ? `<span class="badge b-sent">作成済み <a href="#invoice-${d.id}">${h(d.number)}</a></span>${d.status !== 'draft' ? ' <span class="small muted">送付済みのため作り直しません</span>' : (d.incomplete === 1 ? ' <span class="small muted">未完成の下書きなので、作り直します</span>' : '')}` : ''}
+        ${d ? `<span class="badge b-sent">作成済 <a href="#invoice-${d.id}">${h(d.number)}</a></span>${d.status !== 'draft' ? ' <span class="small muted">送付済のため作り直しません</span>' : (d.incomplete === 1 ? ' <span class="small muted">未完成の下書きなので、作り直します</span>' : '')}` : ''}
         ${inv.missing ? `<span class="badge b-overdue">単価が未設定 ${inv.missing}行</span>` : ''}
       </div>
       <div class="table-wrap">
@@ -247,9 +247,9 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
       </div>
     </section>`; }).join('')}
 
-  ${done.size ? '<label class="check small"><input type="checkbox" name="again" value="1"> 作成済みの取引先も、もう一度作る</label>' : ''}
+  ${done.size ? '<label class="check small"><input type="checkbox" name="again" value="1"> 作成済の取引先も、もう一度作る</label>' : ''}
   <div class="actions sticky-actions">
-    <span class="muted small">単価を入れた取引先と、未完成の下書きは、作成済みでも作り直します。単価が未設定の行は0円で作られます。</span>
+    <span class="muted small">単価を入れた取引先と、未完成の下書きは、作成済でも作り直します。単価が未設定の行は0円で作られます。</span>
     <button class="btn primary">チェックした請求書の下書きを作る</button>
   </div>
 </form>`;
@@ -267,7 +267,7 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
         return out;
       };
 
-      // 単価を手で入れたら、その取引先を作る対象にする（作成済みの下書きも作り直す）
+      // 単価を手で入れたら、その取引先を作る対象にする（作成済の下書きも作り直す）
       root.querySelectorAll('section.plan input[data-key]').forEach((i) => i.addEventListener('input', () => {
         const box = i.closest('section.plan').querySelector('input[name="make"]'); if (box && !box.disabled) box.checked = true;
       }));
@@ -317,8 +317,8 @@ ${errs.length ? `<div class="flash warn mt"><b>確認が必要（${errs.length}�
           remember: f.remember.checked, again: !!(f.again && f.again.checked), recurring: f.recurring.checked,
         });
         Object.assign(work, { tab: '', lines: null, over: {} });
-        flash((ids.length ? ids.length + '件の請求書の下書きを作りました（作り直しを含みます）。内容を確認して送ってください。' : '作った請求書はありません（すでに作成済みか、チェックがありません）。')
-          + (skipped.length ? ' 送付済みの請求書は作り直していません：' + skipped.join('、') : ''), ids.length ? 'ok' : 'warn');
+        flash((ids.length ? ids.length + '件の請求書の下書きを作りました（作り直しを含みます）。内容を確認して送ってください。' : '作った請求書はありません（すでに作成済か、チェックがありません）。')
+          + (skipped.length ? ' 送付済の請求書は作り直していません：' + skipped.join('、') : ''), ids.length ? 'ok' : 'warn');
         toDrafts();
       });
     },

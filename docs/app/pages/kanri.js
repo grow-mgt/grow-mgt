@@ -40,7 +40,7 @@ export function kanriPage() {
 </div>
 <p class="small muted">卸先ごとの金額は、CBMからの仕入れ（明細の 数量×単価 を卸先ごとに足したもの・税込）です。請求書を手で直すと、明細とこの表にも反映されます。下の「売上」は、CBMの請求書（下書きを除く）を件名の「◯月分」で集計したものです。</p>
 
-${k.noRows && !empty ? '<div class="flash warn" style="position:static">今までのスプレッドシートの年間管理表を、まだ取り込んでいません。いまは読み込み済みの明細の月だけが出ています。下の「スプレッドシートの年間管理表を取り込む」から取り込むと、卸先の並び・グループ・過去の月の金額が入ります。</div>' : ''}
+${k.noRows && !empty ? '<div class="flash warn" style="position:static">今までのスプレッドシートの年間管理表を、まだ取り込んでいません。いまは読み込み済の明細の月だけが出ています。下の「スプレッドシートの年間管理表を取り込む」から取り込むと、卸先の並び・グループ・過去の月の金額が入ります。</div>' : ''}
 ${k.pending.length ? `
 <section class="card form">
   <h2 style="margin-top:0">卸先名の確認 <span class="badge warn">${k.pending.length}件</span></h2>

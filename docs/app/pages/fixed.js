@@ -48,7 +48,7 @@ ${!plan.length ? '<div class="empty">「毎月の固定の請求」を登録し�
         <td>${h(p.client.name)}</td>
         <td class="small">${h(p.items.map((i) => i.name).join('、'))}</td>
         <td class="r">${yen(p.total)}</td>
-        <td class="small">${p.done ? `<a href="#invoice-${p.done.id}">作成済み ${h(p.done.number)}</a>` : (p.dup ? `同じ月に請求済み（${h(p.dup.number)}）のため作りません` : '作ります')}</td>
+        <td class="small">${p.done ? `<a href="#invoice-${p.done.id}">作成済 ${h(p.done.number)}</a>` : (p.dup ? `同じ月に請求済（${h(p.dup.number)}）のため作りません` : '作ります')}</td>
       </tr>`; }).join('')}
   </table>
   </div>
@@ -76,7 +76,7 @@ ${!plan.length ? '<div class="empty">「毎月の固定の請求」を登録し�
           await store.saveInvoice(inv);
           n++;
         }
-        flash(n ? `${titleMonth}の固定の請求を${n}件、下書きで作りました。内容を確認して送ってください。` : '作った下書きはありません（作成済み、または同じ項目が請求済みです）。', n ? 'ok' : 'warn');
+        flash(n ? `${titleMonth}の固定の請求を${n}件、下書きで作りました。内容を確認して送ってください。` : '作った下書きはありません（作成済、または同じ項目が請求済です）。', n ? 'ok' : 'warn');
         setFilter('draft', ''); go('list');
       });
     },

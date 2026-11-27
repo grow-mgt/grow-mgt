@@ -32,7 +32,7 @@ export function listPage() {
     const k = byBiz[r.business_id]; if (!k) continue;
     const st = statusOf(r);
     if (r.status !== 'paid' && r.status !== 'draft') { k.unpaid += r.total - r.paid_amount; k.count_unpaid++; }
-    if (st === 'overdue') k.overdue += r.total - r.paid_amount;
+    if (st === 'overdue' || st === 'reminded') k.overdue += r.total - r.paid_amount;
     if (r.status === 'paid' && String(r.paid_at || '').slice(0, 7) === ym) k.paid_month += r.total;
     if (r.status !== 'draft' && r.issue_date >= fyStart) k.fy += r.total;
   }
@@ -40,14 +40,15 @@ export function listPage() {
   for (const r of rows) {
     const st = statusOf(r);
     if (r.status !== 'paid' && r.status !== 'draft') sum.unpaid += r.total - r.paid_amount;
-    if (st === 'overdue') sum.overdue += r.total - r.paid_amount;
+    if (st === 'overdue' || st === 'reminded') sum.overdue += r.total - r.paid_amount;
     if (r.status === 'paid' && String(r.paid_at || '').slice(0, 7) === ym) sum.paid_month += r.total;
     if (r.status === 'sent' && r.source_ref !== 'invoy') sum.unopened++;
   }
   rows = rows.filter((r) => {
     const st = statusOf(r);
     if (filter === 'unpaid' && (r.status === 'paid' || r.status === 'draft')) return false;
-    if (filter === 'overdue' && st !== 'overdue') return false;
+    if (filter === 'overdue' && st !== 'overdue' && st !== 'reminded') return false;
+    if (filter === 'reminded' && st !== 'reminded') return false;
     if (filter === 'draft' && r.status !== 'draft') return false;
     if (filter === 'paid' && r.status !== 'paid') return false;
     if (filter === 'sent' && !(r.status === 'sent' || r.status === 'opened')) return false;
@@ -98,8 +99,8 @@ export function listPage() {
   // 検索欄の候補：いま見ている事業で、請求書がある取引先（名前順）
   const qIds = new Set((bid ? all.filter((r) => r.business_id === bid) : all).map((r) => r.client_id));
   const qClients = store.db.clients.filter((c) => qIds.has(c.id)).sort((x, y) => x.name.localeCompare(y.name, 'ja'));
-  const chips = rec ? { all: 'すべて', unpaid: '入金待ち', overdue: '期限超過', paid: '入金済み' }
-    : { all: 'すべて', unpaid: '未入金', overdue: '期限超過', draft: '下書き', sent: '送付済み・開封済み', paid: '入金済み' };
+  const chips = rec ? { all: 'すべて', unpaid: '入金待ち', overdue: '期限超過', reminded: '督促済', paid: '入金済' }
+    : { all: 'すべて', unpaid: '未入金', overdue: '期限超過', reminded: '督促済', draft: '下書き', sent: '送付済・開封済', paid: '入金済' };
   html += `<form class="filters" id="filters">
     ${Object.entries(chips).map(([k, label]) => `<a href="#list" data-f="${k}" class="chip${filter === k ? ' on' : ''}">${label}</a>`).join('')}
     <span class="q-wrap">
@@ -115,7 +116,7 @@ export function listPage() {
     <div class="bulk-bar" hidden>
       <b><span class="n">0</span>件を</b>
       <select name="status">
-        <option value="">ステータスを選ぶ</option><option value="draft">下書き</option><option value="sent">送付済み</option><option value="opened">開封済み</option><option value="paid">入金済み</option>
+        <option value="">ステータスを選ぶ</option><option value="draft">下書き</option><option value="sent">送付済</option><option value="opened">開封済</option><option value="reminded">督促済（期限超過のみ）</option><option value="paid">入金済</option>
       </select>
       <label id="bulkPd" hidden>入金日 <input type="date" name="paid_date" value="${td}"></label>
       <button class="btn primary small">まとめて変える</button>
@@ -201,16 +202,16 @@ export function listPage() {
         e.preventDefault();
         const ids = checked(), st = f.status.value, pd = f.paid_date.value;
         if (!ids.length || !STATUS_LABELS[st]) { showFlash('請求書とステータスを選んでください。', 'err'); return; }
-        if (st === 'paid' && !(await confirmBox('選んだ請求書を入金済みにしますか？'))) return;
+        if (st === 'paid' && !(await confirmBox('選んだ請求書を入金済にしますか？'))) return;
         let done = 0, skip = 0;
         for (const id of ids) { const inv = store.invoice(id); if (inv.status !== st && setInvoiceStatus(inv, st, isYmd(pd) ? pd : null)) { await store.saveInvoice(inv); done++; } else if (inv.status !== st) skip++; }
-        flash(done + '件のステータスを「' + STATUS_LABELS[st] + '」に変えました。' + (skip ? ` ${skip}件は、開封済み・入金済みのため戻せないので、そのままにしました。` : ''), skip ? 'warn' : 'ok'); go('list');
+        flash(done + '件のステータスを「' + STATUS_LABELS[st] + '」に変えました。' + (skip ? (st === 'reminded' ? ` ${skip}件は、期限超過ではない（または督促済）ので、そのままにしました。` : ` ${skip}件は、開封済・入金済のため戻せないので、そのままにしました。`) : ''), skip ? 'warn' : 'ok'); go('list');
       });
       root.querySelector('#bulkPdf').addEventListener('click', () => { const ids = checked(); if (ids.length) go('print-' + ids.join('-')); });
       root.querySelector('#bulkMail').addEventListener('click', () => { const ids = checked(); if (ids.length) go('bulkmail-' + ids.join('-')); });
 
       // ステータスの表示をクリックすると、選び直せる
-      const names = { draft: '下書き', sent: '送付済み', opened: '開封済み', paid: '入金済み' };
+      const names = { draft: '下書き', sent: '送付済', opened: '開封済', overdue: '期限超過', reminded: '督促済', paid: '入金済' };
       root.querySelectorAll('.st-pick').forEach((el) => el.addEventListener('click', (e) => {
         e.stopPropagation(); e.preventDefault(); close();
         menu = document.createElement('div');
@@ -219,16 +220,17 @@ export function listPage() {
         menu.style.left = (window.scrollX + r.left) + 'px'; menu.style.top = (window.scrollY + r.bottom + 4) + 'px';
         menu.addEventListener('click', (ev) => ev.stopPropagation());
         const invNow = store.invoice(Number(el.dataset.id)), okSt = allowedStatuses(invNow);
-        for (const st of Object.keys(names).filter((k) => okSt.includes(k) || k === invNow.status)) {
+        const so = statusOf(invNow), curSt = so === 'reminded' || so === 'overdue' ? so : invNow.status;
+        for (const st of Object.keys(names).filter((k) => okSt.includes(k) || k === curSt)) {
           const b = document.createElement('button');
-          b.type = 'button'; b.textContent = names[st] + (st === el.dataset.st ? '（現在）' : '');
+          b.type = 'button'; b.textContent = names[st] + (st === curSt ? '（現在）' : '');
           b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;cursor:pointer;font:inherit';
           b.addEventListener('click', async () => {
             close();
             let pd = null;
             if (st === 'paid') { pd = await askDate('入金日', today()); if (!pd) return; }
             const inv = store.invoice(Number(el.dataset.id));
-            if (st === inv.status) return;
+            if (st === curSt) return;
             if (!setInvoiceStatus(inv, st, pd)) { showFlash('このステータスには変えられません。', 'err'); return; }
             await store.saveInvoice(inv);
             flash('1件のステータスを「' + names[st] + '」に変えました。'); go('list');

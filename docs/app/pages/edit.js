@@ -70,7 +70,7 @@ export function editPage({ id = 0, copy = 0 }) {
   const html = `
 <h1>${heading} <span class="muted small">${h(EB.name)}</span></h1>
 ${erec ? '<p class="muted small">入金の消し込みだけの事業なので、先方には送りません。保存すると「入金待ち」になり、入金照合で銀行の入金と突き合わせます。</p>' : ''}
-${id && inv.sent_at ? '<div class="flash warn">この請求書は送付済みです。変更すると、先方がリンクを開いたときに新しい内容が表示されます。</div>' : ''}
+${id && inv.sent_at ? '<div class="flash warn">この請求書は送付済です。変更すると、先方がリンクを開いたときに新しい内容が表示されます。</div>' : ''}
 <form class="card form" id="invForm">
   <div class="grid3">
     <label class="span2">取引先 <em>必須</em>

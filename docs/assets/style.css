@@ -69,6 +69,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; }
 .b-partial { background: #fff4e5; color: #9a3412; }
 .b-paid { background: #e3f4ea; color: #166534; }
 .b-overdue { background: #fde8e8; color: #b91c1c; }
+.b-reminded { background: #fff1d6; color: #9a5b00; }
 
 /* フォーム */
 label { display: block; font-size: 13px; font-weight: 600; color: #374151; }

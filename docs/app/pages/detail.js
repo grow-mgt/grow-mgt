@@ -1,7 +1,7 @@
 // 請求書の詳細（今までの invoice.php と同じ画面）
 import { store } from '../store.js';
 import { go, setBiz } from '../nav.js';
-import { needsCheck, isReconcile, statusBadge, setInvoiceStatus, allowedStatuses, refreshPaymentStatus, fillTemplate, publicUrl, STATUS_LABELS } from '../logic.js';
+import { needsCheck, isReconcile, statusOf, statusBadge, setInvoiceStatus, allowedStatuses, refreshPaymentStatus, fillTemplate, publicUrl, STATUS_LABELS } from '../logic.js';
 import { renderInvoiceDoc, fitDocs } from '../doc.js';
 import { sendMail } from '../mailer.js';
 import { staffList } from './settings.js';
@@ -19,10 +19,11 @@ export function detailPage(id) {
   const events = [...(inv.events || [])].reverse();
   const url = publicUrl(inv);
   const remain = Number(inv.total) - Number(inv.paid_amount || 0);
-  const allChoices = irec ? { sent: '入金待ち', paid: '入金済み' } : { draft: '下書き', sent: '送付済み', opened: '開封済み', paid: '入金済み' };
-  // 開封済みになったら、入金済みにしか進めない（戻せない）
+  const allChoices = irec ? { sent: '入金待ち', paid: '入金済' } : { draft: '下書き', sent: '送付済', opened: '開封済', paid: '入金済' };
+  // 開封済になったら、入金済にしか進めない（戻せない）
   const okSt = allowedStatuses(inv);
-  const statusChoices = Object.fromEntries(Object.entries(allChoices).filter(([k]) => okSt.includes(k) || k === inv.status));
+  const so = statusOf(inv), curSt = so === 'reminded' || so === 'overdue' ? so : inv.status;
+  const statusChoices = Object.fromEntries(Object.entries({ ...Object.fromEntries(Object.entries(allChoices).filter(([k]) => k !== 'paid')), overdue: '期限超過', reminded: '督促済', paid: '入金済' }).filter(([k]) => (allChoices[k] || k === 'paid' || k === 'reminded' || k === 'overdue') && (okSt.includes(k) || k === curSt)));
   const stLocked = inv.status === 'paid' || inv.status === 'partial' ? false : okSt.length <= 2 && inv.status === 'opened';
 
   const html = `
@@ -45,7 +46,7 @@ ${String(inv.check_note || '').trim() !== '' ? (needsCheck(inv) ? `
   <p class="small">CBMの請求書の備考に、次の記載がありました。この請求書の品目・単価・金額が、備考のとおりになっているか確かめてください。</p>
   <p class="remark-text">${nl2br(inv.check_note)}</p>
   <div class="btn-row"><button type="button" class="btn primary" id="checkDone">確認しました（内容は正しい）</button><a class="btn" href="#edit-${id}">編集して直す</a></div>
-</section>` : `<p class="small muted remark-done">PDFの備考は確認済みです（${h(jdatetime(inv.checked_at))}${inv.checked_by ? '・' + h(inv.checked_by) : ''}）：${h(String(inv.check_note).replace(/\n/g, '／'))}</p>`) : ''}
+</section>` : `<p class="small muted remark-done">PDFの備考は確認済です（${h(jdatetime(inv.checked_at))}${inv.checked_by ? '・' + h(inv.checked_by) : ''}）：${h(String(inv.check_note).replace(/\n/g, '／'))}</p>`) : ''}
 
 ${irec ? '' : `
 <ol class="steps">
@@ -64,7 +65,7 @@ ${irec ? '' : `
           <div><dt>件名</dt><dd>${h(inv.title)}</dd></div>
           <div><dt>入金予定日</dt><dd>${h(jdate(inv.due_date))}</dd></div>
           <div><dt>金額</dt><dd class="big">${yen(inv.total)}</dd></div>
-          <div><dt>入金済み</dt><dd>${yen(inv.paid_amount)}</dd></div>
+          <div><dt>入金済</dt><dd>${yen(inv.paid_amount)}</dd></div>
         </dl>
         <table class="mini">${items.map((it) => `<tr><td>${h(it.name)}</td><td class="r">${nf(Math.round(it.qty * it.price))}</td></tr>`).join('')}</table>
         ${inv.notes ? `<p class="small muted mt">${nl2br(inv.notes)}</p>` : ''}
@@ -85,14 +86,14 @@ ${irec ? '' : `
         <label>本文<textarea name="body" rows="12">${h(fillTemplate(store.setting('mail_body'), inv))}</textarea></label>
         <button class="btn primary wide">送信する</button>
       </form>
-      ${!inv.sent_at ? `<button class="btn small wide mt" id="markSent">メール以外で送った（送付済みにする）</button>` : ''}
+      ${!inv.sent_at ? `<button class="btn small wide mt" id="markSent">メール以外で送った（送付済にする）</button>` : ''}
     </section>` : ''}
 
     ${!irec ? `
     <section class="card">
       <h2>請求書リンク</h2>
       <div class="copy"><input readonly value="${h(url)}" id="url"><button class="btn small" type="button" id="copyUrl">コピー</button></div>
-      <p class="small muted">このリンクを開くと「開封済み」になります。${inv.status === 'draft' ? '下書きのうちは先方は開けません。' : ''}${store.isPreview ? '（先方の画面は、メール送信と一緒にこれから移します）' : ''}</p>
+      <p class="small muted">このリンクを開くと「開封済」になります。${inv.status === 'draft' ? '下書きのうちは先方は開けません。' : ''}${store.isPreview ? '（先方の画面は、メール送信と一緒にこれから移します）' : ''}</p>
     </section>` : ''}
 
     <section class="card">
@@ -108,19 +109,19 @@ ${irec ? '' : `
       <form class="inline-form" id="payForm">
         <label>入金日<input type="date" name="paid_date" value="${today()}"></label>
         <label>金額<input name="amount" value="${remain}" inputmode="numeric" class="r"></label>
-        <button class="btn ok wide">入金済みにする</button>
+        <button class="btn ok wide">入金済にする</button>
       </form>
-      <p class="small muted">銀行の明細CSVからまとめて消し込むときは<a href="#payments">入金照合</a>へ。</p>` : `<p class="ok-text">全額入金済みです。</p>`}
+      <p class="small muted">銀行の明細CSVからまとめて消し込むときは<a href="#payments">入金照合</a>へ。</p>` : `<p class="ok-text">全額入金済です。</p>`}
     </section>
 
     <section class="card">
       <h2>ステータスを変える</h2>
       <form class="status-form" id="statusForm">
-        <select name="status">${Object.entries(statusChoices).map(([k, l]) => `<option value="${k}"${inv.status === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <select name="status">${Object.entries(statusChoices).map(([k, l]) => `<option value="${k}"${curSt === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
         <label class="pd"${inv.status === 'paid' ? '' : ' hidden'}>入金日<input type="date" name="paid_date" value="${h(inv.paid_at || today())}"></label>
         <button class="btn small">変える</button>
       </form>
-      <p class="small muted">${inv.status === 'paid' ? '入金済みの請求書は、ステータスを戻せません。まちがえて入金済みにしたときは、上の「入金の記録」の × で取り消してください。' : (stLocked ? '開封済みになった請求書は、入金済みにだけ変えられます（下書き・送付済みには戻せません）。' : '開封済みになると、入金済みにだけ変えられるようになります（戻せません）。')}</p>
+      <p class="small muted">${inv.status === 'paid' ? '入金済の請求書は、ステータスを戻せません。まちがえて入金済にしたときは、上の「入金の記録」の × で取り消してください。' : curSt === 'reminded' ? '督促済の請求書は、入金済に変えるか、期限超過に戻せます。' : statusOf(inv) === 'overdue' ? '期限超過の請求書は、督促済か入金済にだけ変えられます。' : (stLocked ? '開封済になった請求書は、入金済にだけ変えられます（下書き・送付済には戻せません）。' : '開封済になると、入金済にだけ変えられるようになります（戻せません）。')}</p>
     </section>
 
     <section class="card">
@@ -164,7 +165,7 @@ ${irec ? '' : `
           raw.sent_at = nowUtc();
           if (raw.status === 'draft') raw.status = 'sent';
           store.logEvent(raw, 'send', (r.simulated ? '（プレビュー：実際には送っていません）' : '') + 'メール送信：' + to + (cc ? '（CC ' + cc + '）' : '') + '／差し出し人 ' + from);
-          await save(r.simulated ? 'プレビューのため、メールは実際には送っていません。送ったときと同じく「送付済み」にしました。' : '請求書をメールで送りました。', r.simulated ? 'warn' : 'ok');
+          await save(r.simulated ? 'プレビューのため、メールは実際には送っていません。送ったときと同じく「送付済」にしました。' : '請求書をメールで送りました。', r.simulated ? 'warn' : 'ok');
         } catch (err) { showFlash(err.message, 'err'); }
       });
       on('#checkDone', 'click', async () => {
@@ -176,8 +177,8 @@ ${irec ? '' : `
       on('#markSent', 'click', async () => {
         raw.sent_at = raw.sent_at || nowUtc();
         if (raw.status === 'draft') raw.status = 'sent';
-        store.logEvent(raw, 'send', 'メール以外で送付済みにした');
-        await save('送付済みにしました。リンクを先方に伝えてください。');
+        store.logEvent(raw, 'send', 'メール以外で送付済にした');
+        await save('送付済にしました。リンクを先方に伝えてください。');
       });
       on('#copyUrl', 'click', async (e) => {
         try { await navigator.clipboard.writeText(root.querySelector('#url').value); e.target.textContent = 'コピーしました'; }
@@ -206,9 +207,9 @@ ${irec ? '' : `
       sf.addEventListener('submit', async (e) => {
         e.preventDefault();
         const st = sf.status.value, pd = sf.paid_date.value;
-        if (st === 'paid' && !(await confirmBox('入金済みにしますか？'))) return;
-        if (st === raw.status) { showFlash('ステータスは変わっていません。', 'warn'); return; }
-        if (!setInvoiceStatus(raw, st, isYmd(pd) ? pd : null)) { showFlash('このステータスには変えられません。開封済みになった請求書は、入金済みにだけ変えられます。', 'err'); return; }
+        if (st === 'paid' && !(await confirmBox('入金済にしますか？'))) return;
+        if (st === curSt) { showFlash('ステータスは変わっていません。', 'warn'); return; }
+        if (!setInvoiceStatus(raw, st, isYmd(pd) ? pd : null)) { showFlash('このステータスには変えられません。開封済になった請求書は、入金済にだけ変えられます。', 'err'); return; }
         await save('ステータスを「' + STATUS_LABELS[st] + '」に変えました。');
       });
       on('#bizForm', 'submit', async (e) => {

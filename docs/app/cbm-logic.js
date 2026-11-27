@@ -268,7 +268,7 @@ export async function create(tab, pl, opt) {
     if (!opt.clients.includes(cid)) continue;
     const ref = refOf(tab, cid);
     const existing = existingFor(tab, cid); // invoyなどから入れた同じ月の請求書も「すでにある」と数える（二重に作らないため）
-    // すでにある請求書：送付済みなどは決して書き換えない。下書きは、未完成のもの・単価を手で入れたもの・「もう一度作る」のときだけ作り直す
+    // すでにある請求書：送付済などは決して書き換えない。下書きは、未完成のもの・単価を手で入れたもの・「もう一度作る」のときだけ作り直す
     const manual = inv.lines.some((l) => l.from === '手入力');
     if (existing && (existing.status !== 'draft' || existing.source_ref !== ref)) { if (opt.skipped) opt.skipped.push(existing.number); continue; }
     if (existing && !(opt.again || existing.incomplete === 1 || manual)) continue;
