@@ -99,8 +99,8 @@ export function listPage() {
   // 検索欄の候補：いま見ている事業で、請求書がある取引先（名前順）
   const qIds = new Set((bid ? all.filter((r) => r.business_id === bid) : all).map((r) => r.client_id));
   const qClients = store.db.clients.filter((c) => qIds.has(c.id)).sort((x, y) => x.name.localeCompare(y.name, 'ja'));
-  const chips = rec ? { all: 'すべて', unpaid: '入金待ち', overdue: '期限超過', reminded: '督促済', paid: '入金済' }
-    : { all: 'すべて', unpaid: '未入金', overdue: '期限超過', reminded: '督促済', draft: '下書き', sent: '送付済・開封済', paid: '入金済' };
+  const chips = rec ? { all: 'すべて', unpaid: '入金待ち', overdue: '期限超過', paid: '入金済' }
+    : { all: 'すべて', unpaid: '未入金', overdue: '期限超過', draft: '下書き', sent: '送付済・開封済', paid: '入金済' };
   html += `<form class="filters" id="filters">
     ${Object.entries(chips).map(([k, label]) => `<a href="#list" data-f="${k}" class="chip${filter === k ? ' on' : ''}">${label}</a>`).join('')}
     <span class="q-wrap">
