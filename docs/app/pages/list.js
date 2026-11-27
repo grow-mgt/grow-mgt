@@ -95,11 +95,17 @@ export function listPage() {
     </div>`;
   }
 
+  // 検索欄の候補：いま見ている事業で、請求書がある取引先（名前順）
+  const qIds = new Set((bid ? all.filter((r) => r.business_id === bid) : all).map((r) => r.client_id));
+  const qClients = store.db.clients.filter((c) => qIds.has(c.id)).sort((x, y) => x.name.localeCompare(y.name, 'ja'));
   const chips = rec ? { all: 'すべて', unpaid: '入金待ち', overdue: '期限超過', paid: '入金済み' }
     : { all: 'すべて', unpaid: '未入金', overdue: '期限超過', draft: '下書き', sent: '送付済み・開封済み', paid: '入金済み' };
   html += `<form class="filters" id="filters">
     ${Object.entries(chips).map(([k, label]) => `<a href="#list" data-f="${k}" class="chip${filter === k ? ' on' : ''}">${label}</a>`).join('')}
-    <input type="search" name="q" value="${h(q)}" placeholder="取引先・番号で検索">
+    <span class="q-wrap">
+      <input type="search" name="q" value="${h(q)}" placeholder="取引先・番号で検索" autocomplete="off">
+      <div class="pick-list q-list" id="qList" hidden><div class="pick-items">${qClients.map((c) => `<button type="button" class="pick-item${c.name === q ? ' on' : ''}" data-name="${h(c.name)}" data-key="${h((c.name + ' ' + (c.corp_name || '')).toLowerCase())}">${h(c.name)}${c.corp_name ? `<small>${h(c.corp_name)}</small>` : ''}</button>`).join('')}</div></div>
+    </span>
   </form>`;
 
   if (!rows.length) {
@@ -148,6 +154,18 @@ export function listPage() {
       const ff = root.querySelector('#filters');
       ff.addEventListener('submit', (e) => { e.preventDefault(); hold(); setFilter(state.filter, ff.q.value); go('list'); });
       ff.q.addEventListener('search', () => { hold(); setFilter(state.filter, ff.q.value); go('list'); });
+      // 検索欄：自由に打てる＋取引先の一覧から選べる
+      const ql = root.querySelector('#qList');
+      if (ql) {
+        const narrow = () => { const k = ff.q.value.trim().toLowerCase(); let n = 0; ql.querySelectorAll('.pick-item').forEach((b) => { b.hidden = k !== '' && !b.dataset.key.includes(k) && b.dataset.name !== ff.q.value; if (!b.hidden) n++; }); return n; };
+        const open = (on) => { ql.hidden = !on || narrow() === 0; };
+        ff.q.addEventListener('focus', () => { ql.querySelectorAll('.pick-item').forEach((b) => { b.hidden = false; }); ql.hidden = false; });
+        ff.q.addEventListener('input', () => open(true));
+        ff.q.addEventListener('keydown', (e) => { if (e.key === 'Escape') open(false); });
+        ql.addEventListener('mousedown', (e) => e.preventDefault()); // 一覧を押しても入力欄からフォーカスを外さない
+        ql.addEventListener('click', (e) => { const b = e.target.closest('.pick-item'); if (!b) return; hold(); setFilter(state.filter, b.dataset.name); go('list'); });
+        ff.q.addEventListener('blur', () => setTimeout(() => open(false), 120));
+      }
 
       const tb = root.querySelector('#invRows'); if (!tb) return;
       // 行をクリックで詳細へ（チェック欄とステータスは除く）
