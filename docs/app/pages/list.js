@@ -205,7 +205,7 @@ export function listPage() {
         if (st === 'paid' && !(await confirmBox('選んだ請求書を入金済にしますか？'))) return;
         let done = 0, skip = 0;
         for (const id of ids) { const inv = store.invoice(id); if (inv.status !== st && setInvoiceStatus(inv, st, isYmd(pd) ? pd : null)) { await store.saveInvoice(inv); done++; } else if (inv.status !== st) skip++; }
-        flash(done + '件のステータスを「' + STATUS_LABELS[st] + '」に変えました。' + (skip ? (st === 'reminded' ? ` ${skip}件は、期限超過ではない（または督促済）ので、そのままにしました。` : ` ${skip}件は、開封済・入金済のため戻せないので、そのままにしました。`) : ''), skip ? 'warn' : 'ok'); go('list');
+        flash(done + '件のステータスを「' + STATUS_LABELS[st] + '」に変えました。' + (skip ? (st === 'reminded' ? ` ${skip}件は、期限超過ではない（または督促済）ので、そのままにしました。` : ` ${skip}件は、開封済・入金済のため戻せないので、そのままにしました。`) : ''), skip ? 'warn' : 'ok'); hold(); go('list');
       });
       root.querySelector('#bulkPdf').addEventListener('click', () => { const ids = checked(); if (ids.length) go('print-' + ids.join('-')); });
       root.querySelector('#bulkMail').addEventListener('click', () => { const ids = checked(); if (ids.length) go('bulkmail-' + ids.join('-')); });
@@ -233,7 +233,7 @@ export function listPage() {
             if (st === curSt) return;
             if (!setInvoiceStatus(inv, st, pd)) { showFlash('このステータスには変えられません。', 'err'); return; }
             await store.saveInvoice(inv);
-            flash('1件のステータスを「' + names[st] + '」に変えました。'); go('list');
+            flash('1件のステータスを「' + names[st] + '」に変えました。'); hold(); go('list');
           });
           menu.appendChild(b);
         }
