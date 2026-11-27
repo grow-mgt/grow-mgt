@@ -542,5 +542,7 @@ main:has(.save-bar) { padding-bottom: 84px; }
 /* 請求書一覧の検索欄：取引先の一覧から選べる */
 .q-wrap { position: relative; display: inline-block; margin-left: auto; }
 .q-wrap input[type=search] { margin: 0; }
-.q-list { left: auto; right: 0; min-width: 280px; max-width: 90vw; }
-@media (max-width: 640px) { .q-wrap { display: block; width: 100%; margin: 6px 0 0; } .q-wrap input[type=search] { margin: 0; } .q-list { left: 0; right: 0; min-width: 0; } }
+.q-list { left: auto; right: 0; min-width: 100%; width: max-content; max-width: min(90vw, 560px); }
+.q-list .pick-item { white-space: nowrap; }
+.q-list .pick-item small { flex: 0 1 auto; min-width: 0; }
+@media (max-width: 640px) { .q-wrap { display: block; width: 100%; margin: 6px 0 0; } .q-wrap input[type=search] { margin: 0; } .q-list { left: 0; right: 0; min-width: 0; width: auto; max-width: none; } .q-list .pick-item { overflow: hidden; } }
